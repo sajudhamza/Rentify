@@ -1,5 +1,7 @@
-import React from 'react';
+import React , { useState } from 'react';
 import { MapPin, Search, Camera, Wrench, Tent, PartyPopper, Home, Menu } from 'lucide-react';
+import SignInModal from './components/SignInModal'; // Import the modal component
+import { GoogleOAuthProvider } from '@react-oauth/google';
 
 // --- MOCK DATA ---
 // In a real application, this data would come from your Python backend API.
@@ -56,54 +58,70 @@ const rentalItems = [
 
 // --- SUB-COMPONENTS ---
 
-const Header = () => (
-    <header className="sticky top-0 bg-white/80 backdrop-blur-md z-10 border-b border-gray-200">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-                {/* Logo and Location */}
-                <div className="flex items-center space-x-6">
-                    <a href="#" className="text-2xl font-bold text-black">Rentify</a>
-                    <div className="hidden sm:flex items-center space-x-2 text-sm text-gray-500">
-                        <MapPin className="w-4 h-4" />
-                        <span>Location: <span className="font-semibold text-black">New York, NY</span></span>
-                    </div>
-                </div>
+const Header = () => {
+    // State to control the visibility of the sign-in modal
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
-                {/* Search Bar (Placeholder) */}
-                <div className="flex-1 max-w-xs mx-4">
-                    {/* TODO: Implement search functionality */}
-                    <div className="relative">
-                        <input 
-                            type="text" 
-                            placeholder="Search for anything..." 
-                            className="w-full px-4 py-2 border border-gray-300 rounded-full text-sm bg-gray-100 cursor-not-allowed" 
-                            disabled 
-                        />
-                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                            <Search className="w-4 h-4 text-gray-400" />
+    const openModal = () => setIsModalOpen(true);
+    const closeModal = () => setIsModalOpen(false);
+
+    return (
+        <>
+            <header className="sticky top-0 bg-white/80 backdrop-blur-md z-10 border-b border-gray-200">
+                <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex items-center justify-between h-16">
+                        {/* Logo and Location */}
+                        <div className="flex items-center space-x-6">
+                            <a href="#" className="text-2xl font-bold text-black">Rentify</a>
+                            <div className="hidden sm:flex items-center space-x-2 text-sm text-gray-500">
+                                <MapPin className="w-4 h-4" />
+                                <span>Location: <span className="font-semibold text-black">New York, NY</span></span>
+                            </div>
+                        </div>
+
+                        {/* Search Bar (Placeholder) */}
+                        <div className="flex-1 max-w-xs mx-4">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search for anything..."
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-full text-sm bg-gray-100 cursor-not-allowed"
+                                    disabled
+                                />
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                    <Search className="w-4 h-4 text-gray-400" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Navigation Links */}
+                        <nav className="hidden md:flex items-center space-x-4">
+                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-black transition-colors">List Your Item</a>
+                            
+                            {/* Updated Sign In button to trigger the modal */}
+                            <button
+                                onClick={openModal}
+                                className="bg-black text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-gray-800 transition-colors"
+                            >
+                                Sign In
+                            </button>
+                        </nav>
+                        
+                        {/* Mobile Menu Button (Placeholder) */}
+                        <div className="md:hidden">
+                            <button className="text-gray-600 hover:text-black">
+                                <Menu className="w-6 h-6" />
+                            </button>
                         </div>
                     </div>
                 </div>
-
-                {/* Navigation Links */}
-                <nav className="hidden md:flex items-center space-x-4">
-                    {/* TODO: Link to Item Listing page/flow */}
-                    <a href="#" className="text-sm font-medium text-gray-600 hover:text-black transition-colors">List Your Item</a>
-                    {/* TODO: Implement User Authentication and link to profile/auth pages */}
-                    <a href="#" className="bg-black text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-gray-800 transition-colors">Sign In</a>
-                </nav>
-                
-                {/* Mobile Menu Button (Placeholder) */}
-                <div className="md:hidden">
-                    {/* TODO: Implement mobile menu toggle */}
-                    <button className="text-gray-600 hover:text-black">
-                        <Menu className="w-6 h-6" />
-                    </button>
-                </div>
-            </div>
-        </div>
-    </header>
-);
+            </header>
+            
+            {/* Render the modal, controlled by state */}
+            <SignInModal isOpen={isModalOpen} onClose={closeModal} />
+        </>
+    );
+};
 
 const CategoryFilter = ({ icon: Icon, name }) => (
     <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full text-sm font-medium hover:bg-gray-200 transition-colors">
@@ -139,6 +157,7 @@ const Footer = () => (
 // --- MAIN APP COMPONENT ---
 export default function App() {
     return (
+        <GoogleOAuthProvider clientId="your-google-client-id.apps.googleusercontent.com">
         <div className="antialiased" style={{ fontFamily: "'Inter', sans-serif" }}>
             <Header />
 
@@ -169,5 +188,6 @@ export default function App() {
 
             <Footer />
         </div>
+        </GoogleOAuthProvider>
     );
 }
