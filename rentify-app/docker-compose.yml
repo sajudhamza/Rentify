@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # The React Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+    container_name: rentify_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      # This tells the React app where to find the backend API.
+      # The browser (running on your machine) will connect to localhost:8000.
+      - VITE_API_BASE_URL=http://localhost:8000
+
+  # The Python API Service
+  api:
+    build:
+      context: ./backend
+    container_name: rentify_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      # The API service connects to the database service using the service name 'db'
+      - DATABASE_URL=postgresql://rentify_user:your_secure_password@db/rentify_db
+    depends_on:
+      - db
+
+  # The PostgreSQL Database Service
+  db:
+    image: postgres:15
+    container_name: rentify_db
+    environment:
+      - POSTGRES_USER=rentify_user
+      - POSTGRES_PASSWORD=your_secure_password
+      - POSTGRES_DB=rentify_db
+    ports:
+      - "5432:5432" # Expose db port to host for local debugging
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+
+volumes:
+  postgres_data:
+
