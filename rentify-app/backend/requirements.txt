@@ -4,3 +4,6 @@ gunicorn
 sqlalchemy
 alembic
 psycopg2-binary
+bcrypt==3.2.0
+passlib[bcrypt]
+pydantic[email]

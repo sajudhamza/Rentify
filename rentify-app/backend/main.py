@@ -1,41 +1,33 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
 from sqlalchemy.orm import Session
-import os
 from contextlib import asynccontextmanager
 
-# Import your models, schemas, and the database session logic
-import models
-import schemas
-from database import SessionLocal, engine
+import models, schemas, database, auth
 
-# --- Lifespan Event ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # We no longer create tables here. Alembic will manage the database schema.
-    print("Application startup: Database connection will be managed by requests.")
+    # This part runs on startup
+    print("Application starting up...")
+    # The database tables should be created and managed by Alembic.
     yield
+    # This part runs on shutdown
     print("Application shutdown.")
 
 app = FastAPI(lifespan=lifespan)
 
-# CORS Middleware Setup
-origins = [
-    "http://localhost",
-    "http://localhost:5173",
-]
+# --- Middleware ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["http://localhost:5173"], # Allows the React frontend to connect
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- Database Dependency ---
+# --- Dependency ---
 def get_db():
-    db = SessionLocal()
+    db = database.SessionLocal()
     try:
         yield db
     finally:
@@ -48,47 +40,62 @@ def read_root():
     return {"message": "Welcome to the Rentify API"}
 
 # --- User Endpoints ---
-@app.post("/api/users/", response_model=schemas.UserResponse)
+
+@app.post("/api/users/", response_model=schemas.UserResponse, status_code=201)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # In a real app, you would use a library like passlib to securely hash the password.
-    # NEVER store plain text passwords in production.
-    # For now, we'll simulate hashing to fix the field name mismatch.
-    hashed_password = user.password + "_hashed"  # This is a placeholder for actual hashing
-
-    # Create a dictionary of the user data, excluding the plain password
-    user_data = user.dict(exclude={"password"})
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Create the User model instance, explicitly passing the hashed_password
-    db_user = models.User(**user_data, hashed_password=hashed_password)
-
+    hashed_password = auth.get_password_hash(user.password)
+    
+    db_user = models.User(
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        hashed_password=hashed_password
+    )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
     return db_user
 
-@app.get("/api/users/", response_model=List[schemas.UserResponse])
+@app.get("/api/users/", response_model=list[schemas.UserResponse])
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     users = db.query(models.User).offset(skip).limit(limit).all()
     return users
 
+@app.post("/api/login", response_model=schemas.UserResponse)
+def login_user(form_data: schemas.UserLogin, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == form_data.email).first()
+    if not user or not auth.verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password",
+        )
+    return user
+
+
 # --- Category Endpoints ---
-@app.post("/api/categories/", response_model=schemas.CategoryResponse)
+
+@app.post("/api/categories/", response_model=schemas.CategoryResponse, status_code=201)
 def create_category(category: schemas.CategoryCreate, db: Session = Depends(get_db)):
-    db_category = models.Category(**category.dict())
+    db_category = models.Category(**category.model_dump())
     db.add(db_category)
     db.commit()
     db.refresh(db_category)
     return db_category
 
-@app.get("/api/categories/", response_model=List[schemas.CategoryResponse])
+@app.get("/api/categories/", response_model=list[schemas.CategoryResponse])
 def read_categories(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     categories = db.query(models.Category).offset(skip).limit(limit).all()
     return categories
 
 # --- Item Endpoints ---
-@app.post("/api/items/", response_model=schemas.ItemResponse)
+
+@app.post("/api/items/", response_model=schemas.ItemResponse, status_code=201)
 def create_item(item: schemas.ItemCreate, db: Session = Depends(get_db)):
-    # Check if owner and category exist before creating the item
+    # Check if owner and category exist
     owner = db.query(models.User).filter(models.User.id == item.owner_id).first()
     if not owner:
         raise HTTPException(status_code=404, detail=f"Owner with id {item.owner_id} not found")
@@ -97,13 +104,13 @@ def create_item(item: schemas.ItemCreate, db: Session = Depends(get_db)):
     if not category:
         raise HTTPException(status_code=404, detail=f"Category with id {item.category_id} not found")
 
-    db_item = models.Item(**item.dict())
+    db_item = models.Item(**item.model_dump())
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
     return db_item
 
-@app.get("/api/items/", response_model=List[schemas.ItemResponse])
+@app.get("/api/items/", response_model=list[schemas.ItemResponse])
 def read_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     items = db.query(models.Item).offset(skip).limit(limit).all()
     return items
