@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AppWindow, Package, Tag, MapPin, Search, User, Menu, X, LogOut, ChevronDown } from 'lucide-react';
 import { AuthModal } from './components/AuthModal.jsx';
+import { CreateItemModal } from './components/CreateItemModal.jsx';
+import { AppWindow, Package, Tag, MapPin, Search, User, Menu, X, LogOut, ChevronDown } from 'lucide-react';
 
 // --- Configuration ---
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8000';
 
 // --- Reusable Components ---
 
@@ -58,7 +59,7 @@ const UserDropdown = ({ user, onLogout }) => {
 
 
 // Header Component
-const Header = ({ isMenuOpen, setIsMenuOpen, onAuthClick, currentUser, onLogout }) => (
+const Header = ({ isMenuOpen, setIsMenuOpen, onAuthClick, onListItemClick, currentUser, onLogout }) => (
     <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 shadow-sm">
         <div className="container mx-auto px-4 py-3">
             <div className="flex justify-between items-center">
@@ -69,7 +70,7 @@ const Header = ({ isMenuOpen, setIsMenuOpen, onAuthClick, currentUser, onLogout 
 
                 <div className="hidden md:flex items-center space-x-6">
                     <a href="#" className="text-gray-600 hover:text-black transition-colors">Home</a>
-                    <button onClick={onAuthClick} className="text-gray-600 hover:text-black transition-colors">List an Item</button>
+                    <button onClick={onListItemClick} className="text-gray-600 hover:text-black transition-colors">List an Item</button>
                     <a href="#" className="text-gray-600 hover:text-black transition-colors">About</a>
                 </div>
 
@@ -97,11 +98,11 @@ const Header = ({ isMenuOpen, setIsMenuOpen, onAuthClick, currentUser, onLogout 
 );
 
 // Mobile Menu Component
-const MobileMenu = ({ isOpen, onAuthClick, currentUser, onLogout }) => (
+const MobileMenu = ({ isOpen, onAuthClick, onListItemClick, currentUser, onLogout }) => (
     <div className={`fixed top-[68px] left-0 right-0 bg-white shadow-lg z-30 md:hidden transition-transform duration-300 ease-in-out ${isOpen ? 'transform translate-y-0' : 'transform -translate-y-full'}`}>
         <nav className="flex flex-col items-center space-y-4 p-6">
             <a href="#" className="text-gray-800 hover:text-black transition-colors text-lg">Home</a>
-            <button onClick={onAuthClick} className="text-gray-800 hover:text-black transition-colors text-lg">List an Item</button>
+            <button onClick={onListItemClick} className="text-gray-800 hover:text-black transition-colors text-lg">List an Item</button>
             <a href="#" className="text-gray-800 hover:text-black transition-colors text-lg">About</a>
 
             <div className="border-t w-full my-4"></div>
@@ -168,7 +169,10 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    
+    // --- Modals State ---
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+    const [isCreateItemModalOpen, setIsCreateItemModalOpen] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
 
     useEffect(() => {
@@ -203,10 +207,19 @@ export default function App() {
         setIsAuthModalOpen(true);
         setIsMenuOpen(false);
     };
+    
+    const handleOpenCreateItemModal = () => {
+      if (currentUser) {
+        setIsCreateItemModalOpen(true);
+      } else {
+        setIsAuthModalOpen(true);
+      }
+      setIsMenuOpen(false);
+    };
 
-    const handleRegisterSuccess = (user) => {
-        setCurrentUser(user);
-        setIsAuthModalOpen(false);
+    const handleItemCreated = (newItem) => {
+        setItems(prevItems => [newItem, ...prevItems]);
+        setIsCreateItemModalOpen(false);
     };
 
     const handleLoginSuccess = (user) => {
@@ -224,12 +237,14 @@ export default function App() {
                 isMenuOpen={isMenuOpen}
                 setIsMenuOpen={setIsMenuOpen}
                 onAuthClick={handleOpenAuthModal}
+                onListItemClick={handleOpenCreateItemModal}
                 currentUser={currentUser}
                 onLogout={handleLogout}
             />
             <MobileMenu
                 isOpen={isMenuOpen}
                 onAuthClick={handleOpenAuthModal}
+                onListItemClick={handleOpenCreateItemModal}
                 currentUser={currentUser}
                 onLogout={handleLogout}
             />
@@ -237,8 +252,15 @@ export default function App() {
                 isOpen={isAuthModalOpen}
                 onClose={() => setIsAuthModalOpen(false)}
                 apiBaseUrl={API_BASE_URL}
-                onRegisterSuccess={handleRegisterSuccess}
+                onRegisterSuccess={handleLoginSuccess}
                 onLoginSuccess={handleLoginSuccess}
+            />
+            <CreateItemModal
+                isOpen={isCreateItemModalOpen}
+                onClose={() => setIsCreateItemModalOpen(false)}
+                apiBaseUrl={API_BASE_URL}
+                currentUser={currentUser}
+                onItemCreated={handleItemCreated}
             />
 
             <main className="container mx-auto px-4 py-12">
