@@ -23,8 +23,7 @@ import os
 
 # Add the parent directory to the path to allow imports from database, models, etc.
 sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), "..")))
-
-import backend.databases.models as models
+from databases import models
 target_metadata = models.Base.metadata
 
 # other values from the config, defined by the needs of env.py,
