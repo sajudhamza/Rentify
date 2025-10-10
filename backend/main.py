@@ -3,8 +3,8 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
-from backend.databases import models, schemas, database
-from backend.utilities.auth import auth
+from databases import models, schemas, database
+from utilities import auth
 
 # --- Lifespan for database initialization ---
 @asynccontextmanager
