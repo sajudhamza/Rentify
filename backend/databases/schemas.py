@@ -1,7 +1,9 @@
+# backend/schemas.py
+
 from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional, List
-from datetime import datetime
-from .models import BookingStatus
+from datetime import datetime, date
+from databases.models import BookingStatus
 
 
 # --- Token Schemas ---
@@ -59,7 +61,6 @@ class ItemBase(BaseModel):
     description: str
     price_per_day: float
     category_id: int
-    address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     zip_code: Optional[str] = None
@@ -75,7 +76,6 @@ class ItemUpdate(BaseModel):
     price_per_day: Optional[float] = None
     is_available: Optional[bool] = None
     category_id: Optional[int] = None
-    address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     zip_code: Optional[str] = None
@@ -92,11 +92,14 @@ class ItemResponse(ItemBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+# Make sure ItemResponse can resolve the forward reference from BookingResponse
+ItemResponse.model_rebuild()
+
 
 # --- Booking Schemas ---
 class BookingBase(BaseModel):
-    start_date: datetime
-    end_date: datetime
+    start_date: date
+    end_date: date
 
 
 class BookingCreate(BookingBase):
@@ -113,7 +116,7 @@ class BookingResponse(BookingBase):
     status: BookingStatus
     item_id: int
     renter_id: int
-    item: "ItemResponse"
+    item: ItemResponse
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -135,4 +138,3 @@ class ReviewResponse(ReviewBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-

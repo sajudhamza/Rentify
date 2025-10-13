@@ -1,25 +1,32 @@
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-from databases import models
+from utilities import crud, security
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def verify_password(plain_password, hashed_password):
-    """Verifies a plain password against a hashed one."""
-    return pwd_context.verify(plain_password, hashed_password)
 
-def get_password_hash(password):
-    """Hashes a plain password."""
-    return pwd_context.hash(password)
+def authenticate_user(db: Session, username: str, password: str):
+    """
+    Authenticates a user by checking username and password.
 
-def authenticate_user(db: Session, email: str, password: str):
+    Args:
+        db (Session): The database session.
+        username (str): The username to authenticate.
+        password (str): The password to verify.
+
+    Returns:
+        The user object if authentication is successful, otherwise None.
     """
-    Authenticates a user by checking the email and password.
-    """
-    # Find the user by email instead of username
-    user = db.query(models.User).filter(models.User.email == email).first()
+    # Use the CRUD function to get the user by their username
+    user = crud.get_user_by_username(db, username=username)
     if not user:
+        # User not found
         return None
-    if not verify_password(password, user.hashed_password):
+    
+    # Use the security utility to verify the provided password against the stored hash
+    if not security.verify_password(password, user.hashed_password):
+        # Password does not match
         return None
+        
+    # Authentication successful
     return user

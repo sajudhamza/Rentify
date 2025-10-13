@@ -28,7 +28,7 @@ export const AuthModal = ({ isOpen, onClose, apiBaseUrl, onLoginSuccess }) => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({
-                    username: formData.email, // Using email as the username for login
+                    username: formData.username, // Using email as the username for login
                     password: formData.password
                 })
             });
@@ -144,8 +144,8 @@ export const AuthModal = ({ isOpen, onClose, apiBaseUrl, onLoginSuccess }) => {
                              </>
                         )}
                         <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="email">Email</label>
-                            <input type="email" name="email" id="email" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black" value={formData.email} onChange={handleInputChange} />
+                            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="username">Username</label>
+                            <input type="username" name="username" id="username" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black" value={formData.username} onChange={handleInputChange} />
                         </div>
                         <div className="mb-6">
                             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="password">Password</label>
