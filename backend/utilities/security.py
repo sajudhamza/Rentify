@@ -5,34 +5,20 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from utilities import crud
+from . import crud
 from databases import database, models, schemas
 
 # --- Configuration ---
 # It's highly recommended to load these from environment variables
-SECRET_KEY = os.getenv("SECRET_KEY", "a_very_secret_key_for_development")
+SECRET_KEY = os.getenv("SECRET_KEY", "a_very_secret_key_for_development_and_should_be_changed")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # OAuth2 scheme setup
-# tokenUrl should point to your login endpoint
+# tokenUrl should point to your login endpoint, including the /api prefix
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
-
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def get_password_hash(password: str) -> str:
-    """Hashes a plain-text password."""
-    return pwd_context.hash(password)
-
-
-# --- Password Utilities ---
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifies a plain password against a hashed one."""
-    return pwd_context.verify(plain_password, hashed_password)
 
 
 # --- JWT Token Utilities ---
@@ -71,7 +57,8 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
         
-    user = crud.get_user_by_username(db, username=token_data.username)
+    # Use the flexible crud function to find the user by username OR email
+    user = crud.get_user_by_identifier(db, identifier=token_data.username)
     if user is None:
         raise credentials_exception
     return user
@@ -87,3 +74,4 @@ def get_current_active_user(
     if not current_user.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
     return current_user
+

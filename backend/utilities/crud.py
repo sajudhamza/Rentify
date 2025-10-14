@@ -8,15 +8,17 @@ from fastapi import HTTPException, UploadFile, status
 from typing import Optional, Dict, Any
 
 from databases import models, schemas
-from utilities import security
+from . import passwords# Updated import
 
 # --- Helper for saving images ---
 def save_upload_file(upload_file: UploadFile) -> Optional[str]:
     if upload_file:
-        file_path = os.path.join("uploads", upload_file.filename)
+        # Sanitize filename to prevent directory traversal attacks
+        filename = os.path.basename(upload_file.filename)
+        file_path = os.path.join("uploads", filename)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(upload_file.file, buffer)
-        return f"/uploads/{upload_file.filename}"
+        return f"/uploads/{filename}"
     return None
 
 # ===================================================================
@@ -29,14 +31,25 @@ def get_user_by_email(db: Session, email: str):
 def get_user_by_username(db: Session, username: str):
     return db.query(models.User).filter(models.User.username == username).first()
 
+def get_user_by_identifier(db: Session, identifier: str):
+    """
+    Fetches a user by either their username or their email address.
+    """
+    return db.query(models.User).filter(
+        or_(models.User.username == identifier, models.User.email == identifier)
+    ).first()
+
+
 def get_users(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.User).offset(skip).limit(limit).all()
 
 def create_user(db: Session, user: schemas.UserCreate):
     if get_user_by_email(db, email=user.email):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+    if get_user_by_username(db, username=user.username):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")
     
-    hashed_password = security.get_password_hash(user.password)
+    hashed_password = passwords.get_password_hash(user.password) # Updated function call
     db_user = models.User(
         username=user.username,
         email=user.email,
@@ -163,3 +176,4 @@ def update_booking_status(db: Session, booking_id: int, new_status: str, current
     db.commit()
     db.refresh(db_booking)
     return db_booking
+
