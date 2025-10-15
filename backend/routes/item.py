@@ -1,5 +1,3 @@
-# backend/routes/item.py
-
 from fastapi import APIRouter, Depends, status, Form, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -20,6 +18,7 @@ def create_item_route(
     description: str = Form(...),
     price_per_day: float = Form(...),
     category_id: int = Form(...),
+    address: str = Form(...),
     city: str = Form(...),
     state: str = Form(...),
     zip_code: str = Form(...),
@@ -27,7 +26,7 @@ def create_item_route(
 ):
     item_data = {
         "name": name, "description": description, "price_per_day": price_per_day,
-        "category_id": category_id, "city": city, "state": state, "zip_code": zip_code,
+        "category_id": category_id, "address": address, "city": city, "state": state, "zip_code": zip_code,
     }
     return crud.create_item(db=db, owner_id=current_user.id, item_data=item_data, image=image)
 
@@ -52,15 +51,37 @@ def update_item_route(
     description: Optional[str] = Form(None),
     price_per_day: Optional[float] = Form(None),
     category_id: Optional[int] = Form(None),
+    address: Optional[str] = Form(None),
     city: Optional[str] = Form(None),
     state: Optional[str] = Form(None),
     zip_code: Optional[str] = Form(None),
     is_available: Optional[bool] = Form(None),
     image: Optional[UploadFile] = File(None)
 ):
+    # ** THE FIX IS HERE **
+    # Create a dictionary with the data received from the form.
+    # FastAPI gives Form fields with empty strings as None, so we are safe.
+    # However, we must filter out the None values so that we only update the fields that were actually sent.
     update_data = {
-        "name": name, "description": description, "price_per_day": price_per_day,
-        "category_id": category_id, "city": city, "state": state, "zip_code": zip_code,
+        "name": name, 
+        "description": description, 
+        "price_per_day": price_per_day,
+        "category_id": category_id, 
+        "address": address,
+        "city": city, 
+        "state": state, 
+        "zip_code": zip_code,
         "is_available": is_available
     }
-    return crud.update_item(db=db, item_id=item_id, current_user_id=current_user.id, update_data=update_data, image=image)
+    
+    # Filter out keys where the value is None
+    update_data_filtered = {k: v for k, v in update_data.items() if v is not None}
+
+    return crud.update_item(
+        db=db, 
+        item_id=item_id, 
+        current_user_id=current_user.id, 
+        update_data=update_data_filtered, 
+        image=image
+    )
+

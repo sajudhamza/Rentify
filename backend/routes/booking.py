@@ -41,9 +41,11 @@ def update_booking_status_route(
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(security.get_current_active_user)
 ):
+    # ** THE FIX IS HERE **
+    # Convert the Enum member to its string value before passing it to the CRUD function.
     return crud.update_booking_status(
         db=db,
         booking_id=booking_id,
-        new_status=status_update.status,
+        new_status=status_update.status.value, # Use .value to get the string "confirmed"
         current_user_id=current_user.id
     )

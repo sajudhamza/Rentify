@@ -125,7 +125,17 @@ function App() {
 
             <Routes>
                 <Route path="/" element={<HomePage apiBaseUrl={API_BASE_URL} dataVersion={dataVersion} />} />
-                <Route path="/item/:itemId" element={<ItemDetailPage apiBaseUrl={API_BASE_URL} currentUser={currentUser} token={token} onEditClick={setItemToEdit} dataVersion={dataVersion} />} />
+                {/* THE FIX IS HERE: Added a `key` prop to force remount on data change */}
+                <Route 
+                    path="/item/:itemId" 
+                    element={<ItemDetailPage 
+                        key={dataVersion} 
+                        apiBaseUrl={API_BASE_URL} 
+                        currentUser={currentUser} 
+                        token={token} 
+                        onEditClick={setItemToEdit} 
+                    />} 
+                />
                 <Route path="/profile" element={<ProfilePage apiBaseUrl={API_BASE_URL} currentUser={currentUser} token={token} dataVersion={dataVersion} />} />
             </Routes>
         </div>

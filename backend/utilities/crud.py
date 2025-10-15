@@ -2,13 +2,14 @@
 
 import os
 import shutil
-from sqlalchemy.orm import Session, joinedload
+import traceback # Import the traceback module for better debugging
+from sqlalchemy.orm import Session, joinedload, contains_eager
 from sqlalchemy import or_
 from fastapi import HTTPException, UploadFile, status
 from typing import Optional, Dict, Any
 
 from databases import models, schemas
-from . import passwords 
+from . import passwords, email_sender
 
 # --- Helper for saving images ---
 def save_upload_file(upload_file: UploadFile) -> Optional[str]:
@@ -28,6 +29,9 @@ def save_upload_file(upload_file: UploadFile) -> Optional[str]:
 def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
+def get_user_by_username(db: Session, username: str):
+    return db.query(models.User).filter(models.User.username == username).first()
+
 def get_user_by_identifier(db: Session, identifier: str):
     """
     Fetches a user by either their username or their email address.
@@ -36,14 +40,13 @@ def get_user_by_identifier(db: Session, identifier: str):
         or_(models.User.username == identifier, models.User.email == identifier)
     ).first()
 
-
 def get_users(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.User).offset(skip).limit(limit).all()
 
 def create_user(db: Session, user: schemas.UserCreate):
     if get_user_by_email(db, email=user.email):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
-    if db.query(models.User).filter(models.User.username == user.username).first():
+    if get_user_by_username(db, username=user.username):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")
     
     hashed_password = passwords.get_password_hash(user.password)
@@ -154,13 +157,16 @@ def create_booking(db: Session, item_id: int, renter_id: int, booking: schemas.B
     db.add(db_booking)
     db.commit()
     db.refresh(db_booking)
+    
+    try:
+        db.refresh(db_booking, ["item", "renter"]) 
+        email_sender.send_booking_request_email(booking=db_booking)
+    except Exception as e:
+        print(f"Error sending booking request email: {e}")
+
     return db_booking
 
 def get_my_bookings(db: Session, user_id: int):
-    """
-    Fetches all bookings made by a specific user, ensuring all related
-    item and owner data is pre-loaded for efficient serialization.
-    """
     return (
         db.query(models.Booking)
         .filter(models.Booking.renter_id == user_id)
@@ -182,26 +188,57 @@ def get_my_listing_bookings(db: Session, owner_id: int):
     """
     return (
         db.query(models.Booking)
-        .join(models.Item)
+        .join(models.Booking.item)
         .filter(models.Item.owner_id == owner_id)
         .options(
-            joinedload(models.Booking.item)
+            contains_eager(models.Booking.item)
+            .joinedload(models.Item.category)
         )
-        .options(
-            joinedload(models.Booking.renter)
-        )
+        .options(joinedload(models.Booking.renter))
         .all()
     )
 
 def update_booking_status(db: Session, booking_id: int, new_status: str, current_user_id: int):
-    db_booking = db.query(models.Booking).filter(models.Booking.id == booking_id).first()
+    # ** THE FIX IS HERE **
+    # Eagerly load all relationships needed for both the authorization check
+    # and the email templates in a single, robust query.
+    db_booking = (
+        db.query(models.Booking)
+        .options(
+            joinedload(models.Booking.item)
+            .joinedload(models.Item.owner) # Nested eager load for the item's owner
+        )
+        .options(joinedload(models.Booking.renter)) # Eager load the renter
+        .filter(models.Booking.id == booking_id)
+        .first()
+    )
+    
     if not db_booking:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
+    
+    # Authorize: Ensure the current user owns the item being booked.
+    # This check can now safely use the pre-loaded relationship.
     if db_booking.item.owner_id != current_user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this booking")
     
+    # Update status and commit
     db_booking.status = new_status
     db.commit()
+    
+    # --- Send Notification Email if Confirmed ---
+    # The relationships are now guaranteed to be loaded on the db_booking object
+    # even after the commit, because they were eagerly loaded in the initial query.
+    if new_status == "confirmed":
+        try:
+            email_sender.send_booking_approval_email(booking=db_booking)
+        except Exception as e:
+            # Enhanced debugging will now catch any errors during the email process
+            print(f"--- FAILED TO SEND BOOKING APPROVAL EMAIL ---")
+            print(f"Booking ID: {booking_id}")
+            print(f"Error: {e}")
+            traceback.print_exc()
+            print(f"-------------------------------------------------")
+
+    # Refresh the object to get the latest state from the DB before returning to client
     db.refresh(db_booking)
     return db_booking
-
