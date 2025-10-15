@@ -1,11 +1,12 @@
+from datetime import date
 from sqlalchemy import (
     Boolean,
-    Column,
     ForeignKey,
     Integer,
     String,
     Float,
     DateTime,
+    Date, 
     Enum as SQLAlchemyEnum,
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -46,6 +47,7 @@ class Category(Base):
     __tablename__ = "categories"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String, unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
 
     items: Mapped[list["Item"]] = relationship(
         "Item", back_populates="category"
@@ -61,11 +63,15 @@ class Item(Base):
     is_available: Mapped[bool] = mapped_column(Boolean, default=True)
     image_url: Mapped[str | None] = mapped_column(String, nullable=True)
     
-    # New Location Fields
+    # Location Fields
     address: Mapped[str | None] = mapped_column(String, nullable=True)
     city: Mapped[str | None] = mapped_column(String, nullable=True)
     state: Mapped[str | None] = mapped_column(String, nullable=True)
     zip_code: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # New Availability Date Fields
+    available_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    available_to: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
     category_id: Mapped[int] = mapped_column(
@@ -88,8 +94,8 @@ class Item(Base):
 class Booking(Base):
     __tablename__ = "bookings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    start_date: Mapped[DateTime] = mapped_column(DateTime)
-    end_date: Mapped[DateTime] = mapped_column(DateTime)
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
     total_price: Mapped[float] = mapped_column(Float)
     status: Mapped[BookingStatus] = mapped_column(
         SQLAlchemyEnum(BookingStatus), default=BookingStatus.pending

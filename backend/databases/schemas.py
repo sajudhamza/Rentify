@@ -1,9 +1,9 @@
-# backend/schemas.py
+# backend/databases/schemas.py
 
 from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional, List
 from datetime import datetime, date
-from databases.models import BookingStatus
+from .models import BookingStatus
 
 
 # --- Token Schemas ---
@@ -43,6 +43,7 @@ class UserResponse(UserBase):
 # --- Category Schemas ---
 class CategoryBase(BaseModel):
     name: str
+    description: Optional[str] = None # Added description
 
 
 class CategoryCreate(CategoryBase):
@@ -56,45 +57,9 @@ class CategoryResponse(CategoryBase):
 
 
 # --- Item Schemas ---
-class ItemBase(BaseModel):
-    name: str
-    description: str
-    price_per_day: float
-    category_id: int
-    city: Optional[str] = None
-    state: Optional[str] = None
-    zip_code: Optional[str] = None
-
-
-class ItemCreate(ItemBase):
+# Forward declaration for ItemResponse to be used in BookingResponse
+class ItemResponse(BaseModel):
     pass
-
-
-class ItemUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    price_per_day: Optional[float] = None
-    is_available: Optional[bool] = None
-    category_id: Optional[int] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    zip_code: Optional[str] = None
-
-
-class ItemResponse(ItemBase):
-    id: int
-    is_available: bool
-    owner_id: int
-    image_url: Optional[str] = None
-    created_at: datetime
-    owner: UserResponse
-    category: CategoryResponse
-
-    model_config = ConfigDict(from_attributes=True)
-
-# Make sure ItemResponse can resolve the forward reference from BookingResponse
-ItemResponse.model_rebuild()
-
 
 # --- Booking Schemas ---
 class BookingBase(BaseModel):
@@ -116,9 +81,61 @@ class BookingResponse(BookingBase):
     status: BookingStatus
     item_id: int
     renter_id: int
-    item: ItemResponse
+    item: ItemResponse 
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- Item Schemas (Full Definition) ---
+class ItemBase(BaseModel):
+    name: str
+    description: str
+    price_per_day: float
+    category_id: int
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    # Add availability dates
+    available_from: Optional[date] = None
+    available_to: Optional[date] = None
+
+
+class ItemCreate(ItemBase):
+    pass
+
+
+class ItemUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    price_per_day: Optional[float] = None
+    is_available: Optional[bool] = None
+    category_id: Optional[int] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    # Add availability dates
+    available_from: Optional[date] = None
+    available_to: Optional[date] = None
+
+
+# Now fully define ItemResponse, which includes all fields from ItemBase
+class ItemResponse(ItemBase):
+    id: int
+    is_available: bool
+    owner_id: int
+    image_url: Optional[str] = None
+    created_at: datetime
+    owner: UserResponse
+    category: CategoryResponse
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Rebuild the models that have forward references
+BookingResponse.model_rebuild()
+ItemResponse.model_rebuild()
 
 
 # --- Review Schemas ---
@@ -138,3 +155,4 @@ class ReviewResponse(ReviewBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+

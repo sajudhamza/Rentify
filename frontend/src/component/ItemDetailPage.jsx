@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, MapPin, Star, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Star, Loader2, AlertCircle } from 'lucide-react';
 import { DateRange } from 'react-date-range';
-import 'react-date-range/dist/styles.css'; // main style file
-import 'react-date-range/dist/theme/default.css'; // theme css file
-import { addDays, differenceInCalendarDays } from 'date-fns';
+import 'react-date-range/dist/styles.css';
+import 'react-date-range/dist/theme/default.css';
+import { addDays, differenceInCalendarDays, parseISO } from 'date-fns';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -35,6 +35,17 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
                 }
                 const data = await response.json();
                 setItem(data);
+
+                // Set initial date range based on availability
+                const initialStartDate = new Date();
+                const availableFrom = data.available_from ? parseISO(data.available_from) : null;
+                
+                setDateRange([{
+                    startDate: availableFrom && availableFrom > initialStartDate ? availableFrom : initialStartDate,
+                    endDate: availableFrom && availableFrom > initialStartDate ? addDays(availableFrom, 1) : addDays(initialStartDate, 1),
+                    key: 'selection'
+                }]);
+
             } catch (err) {
                 setError(err.message);
             } finally {
@@ -98,19 +109,20 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
         );
     }
 
-    if (!item) {
-        return null;
-    }
+    if (!item) return null;
 
     const isOwner = currentUser && item && currentUser.id === item.owner_id;
     const { startDate, endDate } = dateRange[0];
     const dayCount = startDate && endDate ? differenceInCalendarDays(endDate, startDate) || 1 : 0;
     const totalPrice = item && dayCount > 0 ? dayCount * item.price_per_day : 0;
 
-    // Correctly construct the image URL
     const imageUrl = item.image_url
         ? `${API_BASE_URL}${item.image_url}`
         : `https://placehold.co/600x600/e2e8f0/334155?text=${encodeURIComponent(item.name)}`;
+
+    // Define min and max dates for the calendar based on item availability
+    const minBookingDate = item.available_from ? parseISO(item.available_from) : new Date();
+    const maxBookingDate = item.available_to ? parseISO(item.available_to) : addYears(new Date(), 1);
 
     return (
         <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -133,7 +145,6 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
                     <h1 className="text-3xl lg:text-4xl font-bold mb-2">{item.name}</h1>
                     <div className="flex items-center text-gray-500 mb-4">
                         <MapPin size={16} className="mr-2" />
-                        {/* Display actual item location using correct field names */}
                         <span>{`${item.city || 'Unknown'}, ${item.state || 'Location'}`}</span>
                         <span className="mx-2">·</span>
                         <div className="flex items-center">
@@ -164,13 +175,14 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
                     {!isOwner && (
                         <div>
                              <h3 className="font-semibold mb-3">Select Dates</h3>
-                             <div className="flex justify-center mb-4">
+                             <div className="flex justify-center mb-4 border rounded-lg overflow-hidden">
                                 <DateRange
                                     editableDateInputs={true}
                                     onChange={item => setDateRange([item.selection])}
                                     moveRangeOnFirstSelection={false}
                                     ranges={dateRange}
-                                    minDate={new Date()}
+                                    minDate={minBookingDate}
+                                    maxDate={maxBookingDate}
                                 />
                              </div>
                              
@@ -192,7 +204,7 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
                              <button 
                                 onClick={handleBookingRequest}
                                 className="w-full bg-black text-white py-4 rounded-xl font-semibold hover:bg-gray-800 transition-colors disabled:bg-gray-400"
-                                disabled={dayCount === 0}
+                                disabled={dayCount <= 0}
                             >
                                  Request to Rent
                             </button>
