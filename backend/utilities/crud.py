@@ -2,13 +2,13 @@
 
 import os
 import shutil
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from fastapi import HTTPException, UploadFile, status
 from typing import Optional, Dict, Any
 
 from databases import models, schemas
-from . import passwords# Updated import
+from . import passwords 
 
 # --- Helper for saving images ---
 def save_upload_file(upload_file: UploadFile) -> Optional[str]:
@@ -28,9 +28,6 @@ def save_upload_file(upload_file: UploadFile) -> Optional[str]:
 def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
-def get_user_by_username(db: Session, username: str):
-    return db.query(models.User).filter(models.User.username == username).first()
-
 def get_user_by_identifier(db: Session, identifier: str):
     """
     Fetches a user by either their username or their email address.
@@ -46,10 +43,10 @@ def get_users(db: Session, skip: int = 0, limit: int = 100):
 def create_user(db: Session, user: schemas.UserCreate):
     if get_user_by_email(db, email=user.email):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
-    if get_user_by_username(db, username=user.username):
+    if db.query(models.User).filter(models.User.username == user.username).first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")
     
-    hashed_password = passwords.get_password_hash(user.password) # Updated function call
+    hashed_password = passwords.get_password_hash(user.password)
     db_user = models.User(
         username=user.username,
         email=user.email,
@@ -160,10 +157,41 @@ def create_booking(db: Session, item_id: int, renter_id: int, booking: schemas.B
     return db_booking
 
 def get_my_bookings(db: Session, user_id: int):
-    return db.query(models.Booking).filter(models.Booking.renter_id == user_id).all()
+    """
+    Fetches all bookings made by a specific user, ensuring all related
+    item and owner data is pre-loaded for efficient serialization.
+    """
+    return (
+        db.query(models.Booking)
+        .filter(models.Booking.renter_id == user_id)
+        .options(
+            joinedload(models.Booking.item)
+            .joinedload(models.Item.owner)
+        )
+        .options(
+            joinedload(models.Booking.item)
+            .joinedload(models.Item.category)
+        )
+        .all()
+    )
 
 def get_my_listing_bookings(db: Session, owner_id: int):
-    return db.query(models.Booking).join(models.Item).filter(models.Item.owner_id == owner_id).all()
+    """
+    Fetches all booking requests for items owned by a specific user,
+    ensuring all related item and renter data is pre-loaded.
+    """
+    return (
+        db.query(models.Booking)
+        .join(models.Item)
+        .filter(models.Item.owner_id == owner_id)
+        .options(
+            joinedload(models.Booking.item)
+        )
+        .options(
+            joinedload(models.Booking.renter)
+        )
+        .all()
+    )
 
 def update_booking_status(db: Session, booking_id: int, new_status: str, current_user_id: int):
     db_booking = db.query(models.Booking).filter(models.Booking.id == booking_id).first()

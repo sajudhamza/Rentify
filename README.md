@@ -92,3 +92,11 @@ Database migration commands must be run inside the api container.
     docker-compose exec api alembic upgrade head
 
 You now have a fully containerized, full-stack development environment that is easy to manage and share!
+
+
+
+Alembic:
+
+docker-compose exec api alembic -c config/alembic.ini revision --autogenerate -m "Add description to categories"
+
+docker-compose exec api alembic -c config/alembic.ini upgrade head

@@ -1,40 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Package, List, BookOpen, User } from 'lucide-react';
-import { ProductCard } from './ProductCard.jsx';
+import { Link } from 'react-router-dom';
+import { Loader2, AlertCircle, Package, Calendar, ArrowRight, Check, X as XIcon } from 'lucide-react';
+import { ProductCard } from './ProductCard.jsx'; // Corrected import path
 
-export const ProfilePage = ({ apiBaseUrl, currentUser, token, dataVersion }) => {
+const API_BASE_URL = 'http://localhost:8000';
+
+export const ProfilePage = ({ currentUser, token, dataVersion }) => {
     const [activeTab, setActiveTab] = useState('listings');
     const [listings, setListings] = useState([]);
-    const [rentals, setRentals] = useState([]);
+    const [myRentals, setMyRentals] = useState([]);
     const [bookingRequests, setBookingRequests] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [error, setError] = useState('');
 
     useEffect(() => {
+        if (!currentUser || !token) {
+            setLoading(false);
+            setError("You must be logged in to view this page.");
+            return;
+        }
+
         const fetchData = async () => {
-            if (!currentUser || !token) {
-                setLoading(false);
-                return;
-            };
-
             setLoading(true);
-            setError(null);
-
+            setError('');
             try {
-                const headers = { 'Authorization': `Bearer ${token}` };
-                
                 const [listingsRes, rentalsRes, requestsRes] = await Promise.all([
-                    fetch(`${apiBaseUrl}/api/users/${currentUser.id}/items`, { headers }),
-                    fetch(`${apiBaseUrl}/api/my-bookings`, { headers }),
-                    fetch(`${apiBaseUrl}/api/my-listings/bookings`, { headers })
+                    fetch(`${API_BASE_URL}/api/users/${currentUser.id}/items`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_BASE_URL}/api/my-bookings`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_BASE_URL}/api/my-listings/bookings`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
                 ]);
 
                 if (!listingsRes.ok) throw new Error('Failed to fetch your listings.');
                 if (!rentalsRes.ok) throw new Error('Failed to fetch your rentals.');
                 if (!requestsRes.ok) throw new Error('Failed to fetch booking requests.');
-                
+
                 setListings(await listingsRes.json());
-                setRentals(await rentalsRes.json());
+                setMyRentals(await rentalsRes.json());
                 setBookingRequests(await requestsRes.json());
 
             } catch (err) {
@@ -45,111 +52,55 @@ export const ProfilePage = ({ apiBaseUrl, currentUser, token, dataVersion }) => 
         };
 
         fetchData();
-    }, [currentUser, token, apiBaseUrl, dataVersion]);
-    
+    }, [currentUser, token, dataVersion]);
+
     const handleBookingStatusUpdate = async (bookingId, newStatus) => {
         try {
-            const response = await fetch(`${apiBaseUrl}/api/bookings/${bookingId}`, {
+            const response = await fetch(`${API_BASE_URL}/api/bookings/${bookingId}`, {
                 method: 'PUT',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({ status: newStatus })
             });
-            if (!response.ok) throw new Error('Failed to update booking status.');
-            
-            // Refresh data by updating the state
-            setBookingRequests(prev => prev.map(b => b.id === bookingId ? {...b, status: newStatus} : b));
 
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `Failed to ${newStatus} booking.`);
+            }
+            // Refresh booking requests list
+            setBookingRequests(prev => prev.map(req => 
+                req.id === bookingId ? { ...req, status: newStatus } : req
+            ));
         } catch (err) {
-            alert(err.message);
+            setError(err.message);
         }
     };
 
 
+    if (loading) {
+        return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin h-10 w-10 text-black" /></div>;
+    }
+
+    if (error) {
+        return (
+            <div className="container mx-auto px-4 py-12 text-center">
+                 <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
+                <h2 className="mt-4 text-2xl font-bold">An Error Occurred</h2>
+                <p className="mt-2 text-gray-600">{error}</p>
+            </div>
+        );
+    }
+    
     const renderContent = () => {
-        if (loading) return <div className="flex justify-center items-center p-10"><Loader2 className="h-8 w-8 animate-spin" /></div>;
-        if (error) return <div className="text-center p-10 text-red-500">{error}</div>;
-        if (!currentUser) return <div className="text-center p-10 text-gray-500">Please log in to view your profile.</div>;
-
-        switch(activeTab) {
+        switch (activeTab) {
             case 'listings':
-                return listings.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-10">
-                        {listings.map(item => <ProductCard key={item.id} item={item} />)}
-                    </div>
-                ) : (
-                    <div className="text-center py-10 bg-gray-50 rounded-2xl">
-                           <Package className="mx-auto h-12 w-12 text-gray-400" />
-                           <h3 className="mt-2 text-xl font-semibold text-gray-900">No listings yet</h3>
-                           <p className="mt-1 text-gray-500">You haven't listed any items for rent.</p>
-                    </div>
-                );
-            
+                return <UserListings items={listings} />;
             case 'rentals':
-                 return rentals.length > 0 ? (
-                    <div className="space-y-4 max-w-2xl mx-auto">
-                        {rentals.map(booking => (
-                            <div key={booking.id} className="p-4 border rounded-lg flex justify-between items-center bg-white shadow-sm">
-                                <div>
-                                    <p className="font-semibold text-lg">{booking.item.name}</p>
-                                    <p className="text-sm text-gray-500">
-                                        Rented from: <span className="font-medium">{new Date(booking.start_date).toLocaleDateString()}</span> to <span className="font-medium">{new Date(booking.end_date).toLocaleDateString()}</span>
-                                    </p>
-                                    <p className="text-sm text-gray-500">Total Price: ${booking.total_price}</p>
-                                </div>
-                                <span className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full ${
-                                    booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                                    booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                    booking.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                                    'bg-red-100 text-red-800'
-                                }`}>{booking.status}</span>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                     <div className="text-center py-10 bg-gray-50 rounded-2xl">
-                           <BookOpen className="mx-auto h-12 w-12 text-gray-400" />
-                           <h3 className="mt-2 text-xl font-semibold text-gray-900">No rentals yet</h3>
-                           <p className="mt-1 text-gray-500">You haven't rented any items.</p>
-                    </div>
-                );
-
+                return <UserRentals bookings={myRentals} />;
             case 'requests':
-                return bookingRequests.length > 0 ? (
-                    <div className="space-y-4 max-w-2xl mx-auto">
-                        {bookingRequests.map(req => (
-                            <div key={req.id} className="p-4 border rounded-lg bg-white shadow-sm">
-                                <p className="font-semibold text-lg">{req.item.name}</p>
-                                <p className="text-sm text-gray-500">Requested by: <span className="font-medium">{req.renter.username}</span></p>
-                                <p className="text-sm text-gray-500">
-                                    Dates: <span className="font-medium">{new Date(req.start_date).toLocaleDateString()} - {new Date(req.end_date).toLocaleDateString()}</span>
-                                </p>
-                                <div className="mt-3 flex items-center justify-between">
-                                    <span className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full ${
-                                        req.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                                        req.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                        'bg-red-100 text-red-800'
-                                    }`}>{req.status}</span>
-                                    {req.status === 'pending' && (
-                                        <div className="space-x-2">
-                                            <button onClick={() => handleBookingStatusUpdate(req.id, 'confirmed')} className="px-4 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-semibold transition-colors">Approve</button>
-                                            <button onClick={() => handleBookingStatusUpdate(req.id, 'cancelled')} className="px-4 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-semibold transition-colors">Deny</button>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-10 bg-gray-50 rounded-2xl">
-                           <User className="mx-auto h-12 w-12 text-gray-400" />
-                           <h3 className="mt-2 text-xl font-semibold text-gray-900">No booking requests</h3>
-                           <p className="mt-1 text-gray-500">You have no pending rental requests for your items.</p>
-                    </div>
-                );
-
+                return <BookingRequests requests={bookingRequests} onUpdateStatus={handleBookingStatusUpdate} />;
             default:
                 return null;
         }
@@ -157,14 +108,94 @@ export const ProfilePage = ({ apiBaseUrl, currentUser, token, dataVersion }) => 
 
     return (
         <div className="container mx-auto px-4 py-8">
-            <h1 className="text-3xl font-bold mb-8">My Profile</h1>
-            <div className="flex border-b mb-6">
-                <button onClick={() => setActiveTab('listings')} className={`px-4 py-2 flex items-center gap-2 ${activeTab === 'listings' ? 'border-b-2 border-black font-semibold text-black' : 'text-gray-500 hover:text-black'}`}><List className="h-5 w-5" /> My Listings</button>
-                <button onClick={() => setActiveTab('rentals')} className={`px-4 py-2 flex items-center gap-2 ${activeTab === 'rentals' ? 'border-b-2 border-black font-semibold text-black' : 'text-gray-500 hover:text-black'}`}><BookOpen className="h-5 w-5" /> My Rentals</button>
-                <button onClick={() => setActiveTab('requests')} className={`px-4 py-2 flex items-center gap-2 ${activeTab === 'requests' ? 'border-b-2 border-black font-semibold text-black' : 'text-gray-500 hover:text-black'}`}><User className="h-5 w-5" /> Booking Requests</button>
+            <h1 className="text-3xl font-bold mb-6">My Profile</h1>
+            <div className="border-b mb-6">
+                <nav className="-mb-px flex space-x-6">
+                    <button onClick={() => setActiveTab('listings')} className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'listings' ? 'border-black text-black' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>My Listings</button>
+                    <button onClick={() => setActiveTab('rentals')} className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'rentals' ? 'border-black text-black' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>My Rentals</button>
+                    <button onClick={() => setActiveTab('requests')} className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'requests' ? 'border-black text-black' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>Booking Requests</button>
+                </nav>
             </div>
-            {renderContent()}
+            <div>{renderContent()}</div>
         </div>
     );
+};
+
+// --- Sub-components for Profile Page ---
+
+const UserListings = ({ items }) => {
+    if (items.length === 0) {
+        return <EmptyState title="You haven't listed any items yet" message="When you list an item, it will appear here." />;
+    }
+    return (
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-10">
+            {items.map(item => <ProductCard key={item.id} item={item} apiBaseUrl={API_BASE_URL}/>)}
+        </div>
+    );
+};
+
+const UserRentals = ({ bookings }) => {
+    if (bookings.length === 0) {
+        return <EmptyState title="You haven't rented any items" message="Your past and upcoming rentals will appear here." />;
+    }
+    return <BookingList bookings={bookings} />;
+};
+
+const BookingRequests = ({ requests, onUpdateStatus }) => {
+    if (requests.length === 0) {
+        return <EmptyState title="No booking requests" message="When someone requests to rent one of your items, it will appear here." />;
+    }
+    return <BookingList bookings={requests} isOwnerView={true} onUpdateStatus={onUpdateStatus} />;
+};
+
+const BookingList = ({ bookings, isOwnerView = false, onUpdateStatus }) => (
+    <div className="space-y-4">
+        {bookings.map(booking => (
+            <div key={booking.id} className="bg-gray-50 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <Link to={`/item/${booking.item.id}`}>
+                        <img src={`${API_BASE_URL}${booking.item.image_url}`} alt={booking.item.name} className="w-20 h-20 object-cover rounded-md" />
+                    </Link>
+                    <div>
+                        <Link to={`/item/${booking.item.id}`} className="font-bold hover:underline">{booking.item.name}</Link>
+                        <p className="text-sm text-gray-600 flex items-center">
+                            <Calendar size={14} className="mr-2" />
+                            {new Date(booking.start_date).toLocaleDateString()}
+                            <ArrowRight size={14} className="mx-2" />
+                            {new Date(booking.end_date).toLocaleDateString()}
+                        </p>
+                         <p className="text-sm text-gray-500">Total: ${booking.total_price.toFixed(2)}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusStyles[booking.status] || statusStyles.default}`}>
+                        {booking.status.toUpperCase()}
+                    </span>
+                    {isOwnerView && booking.status === 'pending' && (
+                        <>
+                            <button onClick={() => onUpdateStatus(booking.id, 'confirmed')} className="p-2 rounded-full bg-green-100 text-green-600 hover:bg-green-200"><Check size={16} /></button>
+                            <button onClick={() => onUpdateStatus(booking.id, 'cancelled')} className="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200"><XIcon size={16} /></button>
+                        </>
+                    )}
+                </div>
+            </div>
+        ))}
+    </div>
+);
+
+const EmptyState = ({ title, message }) => (
+    <div className="text-center py-16 bg-gray-50 rounded-lg">
+        <Package className="mx-auto h-12 w-12 text-gray-400" />
+        <h3 className="mt-4 text-xl font-semibold text-gray-900">{title}</h3>
+        <p className="mt-2 text-gray-500">{message}</p>
+    </div>
+);
+
+const statusStyles = {
+    pending: 'bg-yellow-100 text-yellow-800',
+    confirmed: 'bg-green-100 text-green-800',
+    cancelled: 'bg-red-100 text-red-800',
+    completed: 'bg-blue-100 text-blue-800',
+    default: 'bg-gray-100 text-gray-800'
 };
 
