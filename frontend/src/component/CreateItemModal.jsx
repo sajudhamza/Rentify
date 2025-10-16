@@ -1,43 +1,44 @@
-import React, { useState, useEffect } from 'react';
-import { X, Loader2, AlertCircle, UploadCloud } from 'lucide-react';
-import { DateRange, Calendar } from 'react-date-range';
-import { addYears, isSaturday, isSunday, format } from 'date-fns';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Loader2, AlertCircle, UploadCloud, Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar } from 'react-date-range';
+import { addYears, isSaturday, isSunday, format, addDays } from 'date-fns';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
 
 export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, token, currentLocation }) => {
-    // State for each form field for better control
+    // State for form fields
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [pricePerDay, setPricePerDay] = useState('');
     const [categoryId, setCategoryId] = useState('');
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState('');
-    
-    // Location state
     const [address, setAddress] = useState('');
     const [city, setCity] = useState('');
     const [state, setState] = useState('');
     const [zipCode, setZipCode] = useState('');
-
-    // Availability state
-    const [availability, setAvailability] = useState([
-        {
-            startDate: new Date(),
-            endDate: addYears(new Date(), 1),
-            key: 'selection'
-        }
-    ]);
+    
+    // State for availability
+    const [startDate, setStartDate] = useState(new Date());
+    const [endDate, setEndDate] = useState(addYears(new Date(), 1));
     const [availabilityRule, setAvailabilityRule] = useState('all_days');
     const [blockedDates, setBlockedDates] = useState([]);
     
+    // State for UI and data
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    
+    // State for Turo-style calendar popups
+    const [showStartCalendar, setShowStartCalendar] = useState(false);
+    const [showEndCalendar, setShowEndCalendar] = useState(false);
+    const startCalendarRef = useRef(null);
+    const endCalendarRef = useRef(null);
 
+    // Effect to reset the form when the modal opens
     useEffect(() => {
         if (isOpen) {
-            // Reset all form fields when the modal opens
+            // Reset all fields
             setName('');
             setDescription('');
             setPricePerDay('');
@@ -46,26 +47,15 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
             setAddress('');
             setError('');
             setLoading(false);
-            setAvailability([
-                {
-                    startDate: new Date(),
-                    endDate: addYears(new Date(), 1),
-                    key: 'selection'
-                }
-            ]);
+            setStartDate(new Date());
+            setEndDate(addYears(new Date(), 1));
             setAvailabilityRule('all_days');
             setBlockedDates([]);
 
             // Pre-fill location from props
-            if (currentLocation) {
-                setCity(currentLocation.city || '');
-                setState(currentLocation.state || '');
-                setZipCode(currentLocation.zip || '');
-            } else {
-                setCity('');
-                setState('');
-                setZipCode('');
-            }
+            setCity(currentLocation?.city || '');
+            setState(currentLocation?.state || '');
+            setZipCode(currentLocation?.zip || '');
 
             // Fetch categories for the dropdown
             const fetchCategories = async () => {
@@ -74,12 +64,7 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                     if (!response.ok) throw new Error('Failed to fetch categories');
                     const data = await response.json();
                     setCategories(data);
-                    // Set a default category after fetching
-                    if (data.length > 0) {
-                        setCategoryId(data[0].id);
-                    } else {
-                        setCategoryId('');
-                    }
+                    if (data.length > 0) setCategoryId(data[0].id);
                 } catch (err) {
                     setError('Could not load categories.');
                 }
@@ -88,13 +73,26 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
         }
     }, [isOpen, apiBaseUrl, currentLocation]);
     
-    // ** NEW: Effect to clean up blocked dates if the main range changes **
+    // Effect to handle closing calendars on outside clicks
     useEffect(() => {
-        const { startDate, endDate } = availability[0];
+        const handleClickOutside = (event) => {
+            if (startCalendarRef.current && !startCalendarRef.current.contains(event.target)) {
+                setShowStartCalendar(false);
+            }
+            if (endCalendarRef.current && !endCalendarRef.current.contains(event.target)) {
+                setShowEndCalendar(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    // Effect to auto-clean blocked dates if the main range changes
+    useEffect(() => {
         if (startDate && endDate) {
             setBlockedDates(prev => prev.filter(date => date >= startDate && date <= endDate));
         }
-    }, [availability]);
+    }, [startDate, endDate]);
 
 
     const handleImageChange = (e) => {
@@ -117,7 +115,6 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
         }
 
         const data = new FormData();
-        
         data.append('name', name);
         data.append('description', description);
         data.append('price_per_day', parseFloat(pricePerDay));
@@ -126,19 +123,10 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
         data.append('city', city);
         data.append('state', state);
         data.append('zip_code', zipCode);
-
-        if (availability[0].startDate) {
-            data.append('available_from', availability[0].startDate.toISOString().split('T')[0]);
-        }
-        if (availability[0].endDate) {
-            data.append('available_to', availability[0].endDate.toISOString().split('T')[0]);
-        }
-        
+        data.append('available_from', format(startDate, 'yyyy-MM-dd'));
+        data.append('available_to', format(endDate, 'yyyy-MM-dd'));
         data.append('availability_rule', availabilityRule);
-
-        const formattedBlockedDates = blockedDates.map(date => format(date, 'yyyy-MM-dd'));
-        data.append('disabled_dates', JSON.stringify(formattedBlockedDates));
-
+        data.append('disabled_dates', JSON.stringify(blockedDates.map(d => format(d, 'yyyy-MM-dd'))));
         if (imageFile) {
             data.append('image', imageFile);
         }
@@ -146,54 +134,48 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
         try {
             const response = await fetch(`${apiBaseUrl}/api/items/`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: { 'Authorization': `Bearer ${token}` },
                 body: data,
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                if (response.status === 422) {
-                    const errorDetails = errorData.detail.map(err => `${err.loc.join(' > ')}: ${err.msg}`).join(', ');
-                    throw new Error(`Validation Error: ${errorDetails}`);
-                }
-                throw new Error(errorData.detail || 'Failed to create item.');
+                const errorMsg = errorData.detail?.[0]?.msg || errorData.detail || 'Failed to create item.';
+                throw new Error(errorMsg);
             }
 
-            const newItem = await response.json();
-            onItemCreated(newItem);
-
+            onItemCreated(await response.json());
         } catch (err) {
             setError(err.message);
         } finally {
             setLoading(false);
         }
     };
+    
+    // Calendar handlers
+    const handleStartDateSelect = (date) => {
+        setStartDate(date);
+        setShowStartCalendar(false);
+        if (date >= endDate) {
+            setEndDate(addDays(date, 1));
+        }
+    };
+    
+    const handleEndDateSelect = (date) => {
+        setEndDate(date);
+        setShowEndCalendar(false);
+    };
 
     const handleBlockDateToggle = (date) => {
         const dateString = format(date, 'yyyy-MM-dd');
         setBlockedDates(prev => {
             const isBlocked = prev.some(d => format(d, 'yyyy-MM-dd') === dateString);
-            if (isBlocked) {
-                return prev.filter(d => format(d, 'yyyy-MM-dd') !== dateString);
-            } else {
-                return [...prev, date];
-            }
+            return isBlocked
+                ? prev.filter(d => format(d, 'yyyy-MM-dd') !== dateString)
+                : [...prev, date];
         });
     };
     
-    const getDisabledDays = (date) => {
-        if (availabilityRule === 'weekdays_only' && (isSaturday(date) || isSunday(date))) {
-            return true;
-        }
-        if (availabilityRule === 'weekends_only' && (!isSaturday(date) && !isSunday(date))) {
-            return true;
-        }
-        const dateString = format(date, 'yyyy-MM-dd');
-        return blockedDates.some(d => format(d, 'yyyy-MM-dd') === dateString);
-    };
-
     if (!isOpen) return null;
 
     return (
@@ -202,9 +184,7 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                 <div className="p-8">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-2xl font-bold">List a New Item</h2>
-                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-                            <X size={24} />
-                        </button>
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
                     </div>
 
                     {error && (
@@ -215,9 +195,10 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        {/* --- Item Details, Image, Location Sections --- */}
                         <div className="space-y-4">
-                             <h3 className="text-lg font-medium text-gray-900">Item Details</h3>
-                            <div>
+                            <h3 className="text-lg font-medium text-gray-900">Item Details</h3>
+                             <div>
                                 <label htmlFor="name" className="block text-sm font-medium text-gray-700">Item Name</label>
                                 <input type="text" id="name" value={name} onChange={(e) => setName(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black" required />
                             </div>
@@ -238,10 +219,9 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                                 </div>
                             </div>
                         </div>
-
                         <div>
                            <label className="block text-lg font-medium text-gray-900">Item Image</label>
-                            <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                           <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
                                 <div className="space-y-1 text-center">
                                     {imagePreview ? (
                                         <img src={imagePreview} alt="Item preview" className="mx-auto h-24 w-auto object-cover rounded-md" />
@@ -259,7 +239,6 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                                 </div>
                             </div>
                         </div>
-
                         <div className="space-y-4">
                              <h3 className="text-lg font-medium text-gray-900">Item Location</h3>
                              <div>
@@ -281,54 +260,71 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                                 </div>
                             </div>
                         </div>
-                        
-                         <div>
-                             <h3 className="text-lg font-medium text-gray-900">Set Availability</h3>
-                             <p className="text-sm text-gray-500">First, set the overall date range your item is available.</p>
-                             <div className="mt-2 flex justify-center border rounded-lg overflow-hidden">
-                                <DateRange
-                                    onChange={item => setAvailability([item.selection])}
-                                    ranges={availability}
-                                    months={1} 
-                                    minDate={new Date()}
-                                    maxDate={addYears(new Date(), 1)}
-                                />
-                             </div>
-                             <div className="mt-4">
-                                 <label className="block text-sm font-medium text-gray-700">Rental Rules</label>
-                                 <div className="mt-2 flex justify-center rounded-lg shadow-sm">
+
+                        {/* --- NEW Availability Section --- */}
+                        <div>
+                            <h3 className="text-lg font-medium text-gray-900">Set Availability</h3>
+                            <p className="text-sm text-gray-500">Set the overall date range and any rental rules for your item.</p>
+                            
+                            <div className="grid grid-cols-2 gap-4 mt-4">
+                                {/* Start Date Picker */}
+                                <div className="relative">
+                                    <label className="text-xs font-bold text-gray-500">AVAILABLE FROM</label>
+                                    <div onClick={() => { setShowStartCalendar(true); setShowEndCalendar(false); }} className="w-full mt-1 p-3 border rounded-lg cursor-pointer flex justify-between items-center bg-white">
+                                        <span>{format(startDate, 'MMM dd, yyyy')}</span>
+                                        <CalendarIcon size={16} className="text-gray-500" />
+                                    </div>
+                                    {showStartCalendar && (
+                                        <div className="absolute top-full left-0 z-10 mt-2 shadow-lg bg-white rounded-lg" ref={startCalendarRef}>
+                                            <Calendar date={startDate} onChange={handleStartDateSelect} minDate={new Date()} maxDate={addYears(new Date(), 1)} />
+                                        </div>
+                                    )}
+                                </div>
+                                {/* End Date Picker */}
+                                <div className="relative">
+                                    <label className="text-xs font-bold text-gray-500">AVAILABLE UNTIL</label>
+                                    <div onClick={() => { setShowEndCalendar(true); setShowStartCalendar(false); }} className="w-full mt-1 p-3 border rounded-lg cursor-pointer flex justify-between items-center bg-white">
+                                        <span>{format(endDate, 'MMM dd, yyyy')}</span>
+                                        <CalendarIcon size={16} className="text-gray-500" />
+                                    </div>
+                                    {showEndCalendar && (
+                                        <div className="absolute top-full right-0 z-10 mt-2 shadow-lg bg-white rounded-lg" ref={endCalendarRef}>
+                                            <Calendar date={endDate} onChange={handleEndDateSelect} minDate={addDays(startDate, 1)} maxDate={addYears(new Date(), 1)} />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            <div className="mt-4">
+                                <label className="block text-sm font-medium text-gray-700">Rental Rules</label>
+                                <div className="mt-2 flex justify-center rounded-lg shadow-sm">
                                     <button type="button" onClick={() => setAvailabilityRule('all_days')} className={`px-4 py-2 text-sm font-medium rounded-l-lg ${availabilityRule === 'all_days' ? 'bg-black text-white' : 'bg-white text-gray-700 hover:bg-gray-50 border'}`}>All Days</button>
                                     <button type="button" onClick={() => setAvailabilityRule('weekdays_only')} className={`px-4 py-2 text-sm font-medium -ml-px ${availabilityRule === 'weekdays_only' ? 'bg-black text-white' : 'bg-white text-gray-700 hover:bg-gray-50 border'}`}>Weekdays Only</button>
                                     <button type="button" onClick={() => setAvailabilityRule('weekends_only')} className={`px-4 py-2 text-sm font-medium rounded-r-lg -ml-px ${availabilityRule === 'weekends_only' ? 'bg-black text-white' : 'bg-white text-gray-700 hover:bg-gray-50 border'}`}>Weekends Only</button>
                                 </div>
-                             </div>
+                            </div>
 
-                             <div className="mt-4">
-                                <label className="block text-sm font-medium text-gray-700">Block Out Specific Dates (Optional)</label>
-                                <p className="text-sm text-gray-500">Click on dates in the calendar below to toggle them as unavailable.</p>
-                                <div className="mt-2 flex justify-center border rounded-lg overflow-hidden">
-                                     <Calendar
-                                        onChange={handleBlockDateToggle}
-                                        disabledDates={blockedDates}
-                                        // ** THE FIX IS HERE: Constrain the calendar to the selected availability range **
-                                        minDate={availability[0].startDate}
-                                        maxDate={availability[0].endDate}
-                                    />
-                                </div>
-                                {blockedDates.length > 0 && (
-                                    <div className="mt-2 text-sm text-gray-600">
-                                        <strong>Blocked:</strong> {blockedDates.map(d => format(d, 'MM/dd/yy')).join(', ')}
-                                    </div>
-                                )}
-                             </div>
+                            <div className="mt-4">
+                               <label className="block text-sm font-medium text-gray-700">Block Out Specific Dates (Optional)</label>
+                               <p className="text-sm text-gray-500">Click on dates in the calendar below to toggle them as unavailable.</p>
+                               <div className="mt-2 flex justify-center border rounded-lg overflow-hidden">
+                                    <Calendar
+                                       onChange={handleBlockDateToggle}
+                                       disabledDates={blockedDates}
+                                       minDate={startDate}
+                                       maxDate={endDate}
+                                   />
+                               </div>
+                               {blockedDates.length > 0 && (
+                                   <div className="mt-2 text-sm text-gray-600">
+                                       <strong>Blocked:</strong> {blockedDates.map(d => format(d, 'MM/dd/yy')).join(', ')}
+                                   </div>
+                               )}
+                            </div>
                         </div>
 
                         <div className="flex justify-end pt-4">
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full bg-black text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-800 disabled:bg-gray-400 flex justify-center items-center transition-colors"
-                            >
+                            <button type="submit" disabled={loading} className="w-full bg-black text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-800 disabled:bg-gray-400 flex justify-center items-center transition-colors">
                                 {loading ? <Loader2 className="animate-spin" /> : 'List Item'}
                             </button>
                         </div>

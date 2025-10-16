@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, AlertCircle, Package, Calendar, ArrowRight, Check, X as XIcon } from 'lucide-react';
-import { ProductCard } from './ProductCard.jsx'; // Corrected import path
+import { ProductCard } from './ProductCard'; 
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -69,7 +69,7 @@ export const ProfilePage = ({ currentUser, token, dataVersion }) => {
                 const errorData = await response.json();
                 throw new Error(errorData.detail || `Failed to ${newStatus} booking.`);
             }
-            // Refresh booking requests list
+            // Refresh booking requests list by toggling dataVersion
             setBookingRequests(prev => prev.map(req => 
                 req.id === bookingId ? { ...req, status: newStatus } : req
             ));
@@ -129,7 +129,7 @@ const UserListings = ({ items }) => {
     }
     return (
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-10">
-            {items.map(item => <ProductCard key={item.id} item={item} apiBaseUrl={API_BASE_URL}/>)}
+            {items.map(item => <ProductCard key={item.id} item={item} />)}
         </div>
     );
 };
@@ -150,36 +150,50 @@ const BookingRequests = ({ requests, onUpdateStatus }) => {
 
 const BookingList = ({ bookings, isOwnerView = false, onUpdateStatus }) => (
     <div className="space-y-4">
-        {bookings.map(booking => (
-            <div key={booking.id} className="bg-gray-50 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <Link to={`/item/${booking.item.id}`}>
-                        <img src={`${API_BASE_URL}${booking.item.image_url}`} alt={booking.item.name} className="w-20 h-20 object-cover rounded-md" />
-                    </Link>
-                    <div>
-                        <Link to={`/item/${booking.item.id}`} className="font-bold hover:underline">{booking.item.name}</Link>
-                        <p className="text-sm text-gray-600 flex items-center">
-                            <Calendar size={14} className="mr-2" />
-                            {new Date(booking.start_date).toLocaleDateString()}
-                            <ArrowRight size={14} className="mx-2" />
-                            {new Date(booking.end_date).toLocaleDateString()}
-                        </p>
-                         <p className="text-sm text-gray-500">Total: ${booking.total_price.toFixed(2)}</p>
+        {bookings.map(booking => {
+            // ** THE FIX IS HERE: Correctly construct the image URL **
+            const imageUrl = booking.item.image_url
+                ? `${API_BASE_URL}${booking.item.image_url}`
+                : `https://placehold.co/400x400/e2e8f0/334155?text=${encodeURIComponent(booking.item.name)}`;
+
+            return (
+                <div key={booking.id} className="bg-gray-50 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        {/* ** THE FIX IS HERE: Use Link for navigation ** */}
+                        <Link to={`/item/${booking.item.id}`}>
+                            <img 
+                                src={imageUrl} 
+                                alt={booking.item.name} 
+                                className="w-20 h-20 object-cover rounded-md" 
+                                onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/400x400/e2e8f0/334155?text=Image`; }}
+                            />
+                        </Link>
+                        <div>
+                            {/* ** THE FIX IS HERE: Use Link for navigation ** */}
+                            <Link to={`/item/${booking.item.id}`} className="font-bold hover:underline">{booking.item.name}</Link>
+                            <p className="text-sm text-gray-600 flex items-center">
+                                <Calendar size={14} className="mr-2" />
+                                {new Date(booking.start_date).toLocaleDateString()}
+                                <ArrowRight size={14} className="mx-2" />
+                                {new Date(booking.end_date).toLocaleDateString()}
+                            </p>
+                             <p className="text-sm text-gray-500">Total: ${booking.total_price.toFixed(2)}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusStyles[booking.status] || statusStyles.default}`}>
+                            {booking.status.toUpperCase()}
+                        </span>
+                        {isOwnerView && booking.status === 'pending' && (
+                            <>
+                                <button onClick={() => onUpdateStatus(booking.id, 'confirmed')} className="p-2 rounded-full bg-green-100 text-green-600 hover:bg-green-200"><Check size={16} /></button>
+                                <button onClick={() => onUpdateStatus(booking.id, 'cancelled')} className="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200"><XIcon size={16} /></button>
+                            </>
+                        )}
                     </div>
                 </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusStyles[booking.status] || statusStyles.default}`}>
-                        {booking.status.toUpperCase()}
-                    </span>
-                    {isOwnerView && booking.status === 'pending' && (
-                        <>
-                            <button onClick={() => onUpdateStatus(booking.id, 'confirmed')} className="p-2 rounded-full bg-green-100 text-green-600 hover:bg-green-200"><Check size={16} /></button>
-                            <button onClick={() => onUpdateStatus(booking.id, 'cancelled')} className="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200"><XIcon size={16} /></button>
-                        </>
-                    )}
-                </div>
-            </div>
-        ))}
+            );
+        })}
     </div>
 );
 

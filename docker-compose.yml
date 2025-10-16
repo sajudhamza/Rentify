@@ -44,6 +44,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
 
+    # --- NEW: MailHog Email Catcher Service ---
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025" # SMTP port
+      - "8025:8025" # Web UI port
+
 volumes:
   postgres_data:
 
