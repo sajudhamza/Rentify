@@ -36,7 +36,6 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
                 const data = await response.json();
                 setItem(data);
 
-                // Set initial date range based on availability
                 const initialStartDate = new Date();
                 const availableFrom = data.available_from ? parseISO(data.available_from) : null;
                 
@@ -120,7 +119,32 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
         ? `${API_BASE_URL}${item.image_url}`
         : `https://placehold.co/600x600/e2e8f0/334155?text=${encodeURIComponent(item.name)}`;
 
-    // Define min and max dates for the calendar based on item availability
+    // ** THE FIX IS HERE: Process the disabled dates from the API **
+    // 1. Parse the disabled_dates (which are strings) into Date objects.
+    // 2. Combine them with any weekend/weekday rules.
+    const getDisabledDaysForBooking = (date) => {
+        // Rule-based disabling
+        if (item.availability_rule === 'weekdays_only' && (isSaturday(date) || isSunday(date))) {
+            return true;
+        }
+        if (item.availability_rule === 'weekends_only' && (!isSaturday(date) && !isSunday(date))) {
+            return true;
+        }
+        
+        // Specific date disabling
+        if (item.disabled_dates && Array.isArray(item.disabled_dates)) {
+            // The dates from the DB are strings, so we need to parse them
+            const blockedDates = item.disabled_dates.map(d => parseISO(d));
+            return blockedDates.some(disabledDate => 
+                date.getFullYear() === disabledDate.getFullYear() &&
+                date.getMonth() === disabledDate.getMonth() &&
+                date.getDate() === disabledDate.getDate()
+            );
+        }
+        
+        return false;
+    };
+
     const minBookingDate = item.available_from ? parseISO(item.available_from) : new Date();
     const maxBookingDate = item.available_to ? parseISO(item.available_to) : addYears(new Date(), 1);
 
@@ -183,6 +207,8 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
                                     ranges={dateRange}
                                     minDate={minBookingDate}
                                     maxDate={maxBookingDate}
+                                    // ** THE FIX IS HERE: Pass the disabled dates function **
+                                    disabledDay={getDisabledDaysForBooking}
                                 />
                              </div>
                              

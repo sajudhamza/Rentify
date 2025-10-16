@@ -1,7 +1,10 @@
+# backend/routes/item.py
+
 from fastapi import APIRouter, Depends, status, Form, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
+import json
 
 from utilities import crud, security
 from databases import database, models, schemas
@@ -25,6 +28,8 @@ def create_item_route(
     zip_code: Optional[str] = Form(None),
     available_from: Optional[date] = Form(None),
     available_to: Optional[date] = Form(None),
+    availability_rule: str = Form('all_days'),
+    disabled_dates: str = Form("[]"), # Receive as JSON string of dates
     image: Optional[UploadFile] = File(None)
 ):
     item_data = {
@@ -32,6 +37,8 @@ def create_item_route(
         "category_id": category_id, "address": address, "city": city,
         "state": state, "zip_code": zip_code,
         "available_from": available_from, "available_to": available_to,
+        "availability_rule": availability_rule,
+        "disabled_dates": json.loads(disabled_dates), # Parse the JSON string into a list
     }
     return crud.create_item(db=db, owner_id=current_user.id, item_data=item_data, image=image)
 
@@ -63,6 +70,8 @@ def update_item_route(
     is_available: Optional[bool] = Form(None),
     available_from: Optional[date] = Form(None),
     available_to: Optional[date] = Form(None),
+    availability_rule: Optional[str] = Form(None),
+    disabled_dates: Optional[str] = Form(None), # Receive as JSON string
     image: Optional[UploadFile] = File(None)
 ):
     update_data = {
@@ -77,7 +86,12 @@ def update_item_route(
         "is_available": is_available,
         "available_from": available_from,
         "available_to": available_to,
+        "availability_rule": availability_rule,
     }
+    
+    # Parse disabled_dates if it's provided as a string
+    if disabled_dates is not None:
+        update_data["disabled_dates"] = json.loads(disabled_dates)
 
     # Filter out keys where the value is None, so we only update provided fields
     update_data_filtered = {k: v for k, v in update_data.items() if v is not None}

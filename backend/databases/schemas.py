@@ -43,7 +43,7 @@ class UserResponse(UserBase):
 # --- Category Schemas ---
 class CategoryBase(BaseModel):
     name: str
-    description: Optional[str] = None # Added description
+    description: Optional[str] = None
 
 
 class CategoryCreate(CategoryBase):
@@ -52,6 +52,7 @@ class CategoryCreate(CategoryBase):
 
 class CategoryResponse(CategoryBase):
     id: int
+    description: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -96,9 +97,11 @@ class ItemBase(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     zip_code: Optional[str] = None
-    # Add availability dates
     available_from: Optional[date] = None
     available_to: Optional[date] = None
+    # ** NEW: Add availability rule and disabled dates **
+    availability_rule: Optional[str] = 'all_days'
+    disabled_dates: Optional[List[date]] = []
 
 
 class ItemCreate(ItemBase):
@@ -115,12 +118,13 @@ class ItemUpdate(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     zip_code: Optional[str] = None
-    # Add availability dates
     available_from: Optional[date] = None
     available_to: Optional[date] = None
+    availability_rule: Optional[str] = None
+    disabled_dates: Optional[List[date]] = None
 
 
-# Now fully define ItemResponse, which includes all fields from ItemBase
+# Now fully define ItemResponse
 class ItemResponse(ItemBase):
     id: int
     is_available: bool

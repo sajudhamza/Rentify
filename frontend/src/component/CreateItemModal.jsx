@@ -1,11 +1,7 @@
-// NOTE: To use the date picker, you must install the required packages.
-// Please run this command in your 'frontend' directory:
-// npm install react-date-range date-fns --save
-
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertCircle, UploadCloud } from 'lucide-react';
-import { DateRangePicker } from 'react-date-range';
-import { addYears } from 'date-fns';
+import { DateRange, Calendar } from 'react-date-range';
+import { addYears, isSaturday, isSunday, format } from 'date-fns';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
 
@@ -32,6 +28,8 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
             key: 'selection'
         }
     ]);
+    const [availabilityRule, setAvailabilityRule] = useState('all_days');
+    const [blockedDates, setBlockedDates] = useState([]);
     
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -55,6 +53,8 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                     key: 'selection'
                 }
             ]);
+            setAvailabilityRule('all_days');
+            setBlockedDates([]);
 
             // Pre-fill location from props
             if (currentLocation) {
@@ -87,6 +87,15 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
             fetchCategories();
         }
     }, [isOpen, apiBaseUrl, currentLocation]);
+    
+    // ** NEW: Effect to clean up blocked dates if the main range changes **
+    useEffect(() => {
+        const { startDate, endDate } = availability[0];
+        if (startDate && endDate) {
+            setBlockedDates(prev => prev.filter(date => date >= startDate && date <= endDate));
+        }
+    }, [availability]);
+
 
     const handleImageChange = (e) => {
         const file = e.target.files[0];
@@ -107,7 +116,6 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
             return;
         }
 
-        // Use FormData for multipart request (file upload)
         const data = new FormData();
         
         data.append('name', name);
@@ -119,13 +127,17 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
         data.append('state', state);
         data.append('zip_code', zipCode);
 
-        // Add availability dates
         if (availability[0].startDate) {
             data.append('available_from', availability[0].startDate.toISOString().split('T')[0]);
         }
         if (availability[0].endDate) {
             data.append('available_to', availability[0].endDate.toISOString().split('T')[0]);
         }
+        
+        data.append('availability_rule', availabilityRule);
+
+        const formattedBlockedDates = blockedDates.map(date => format(date, 'yyyy-MM-dd'));
+        data.append('disabled_dates', JSON.stringify(formattedBlockedDates));
 
         if (imageFile) {
             data.append('image', imageFile);
@@ -136,7 +148,6 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
-                    // Browser sets Content-Type automatically for FormData
                 },
                 body: data,
             });
@@ -144,7 +155,6 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
             if (!response.ok) {
                 const errorData = await response.json();
                 if (response.status === 422) {
-                    // Handle detailed validation errors from FastAPI
                     const errorDetails = errorData.detail.map(err => `${err.loc.join(' > ')}: ${err.msg}`).join(', ');
                     throw new Error(`Validation Error: ${errorDetails}`);
                 }
@@ -152,7 +162,7 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
             }
 
             const newItem = await response.json();
-            onItemCreated(newItem); // Pass new item up to parent
+            onItemCreated(newItem);
 
         } catch (err) {
             setError(err.message);
@@ -161,11 +171,34 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
         }
     };
 
+    const handleBlockDateToggle = (date) => {
+        const dateString = format(date, 'yyyy-MM-dd');
+        setBlockedDates(prev => {
+            const isBlocked = prev.some(d => format(d, 'yyyy-MM-dd') === dateString);
+            if (isBlocked) {
+                return prev.filter(d => format(d, 'yyyy-MM-dd') !== dateString);
+            } else {
+                return [...prev, date];
+            }
+        });
+    };
+    
+    const getDisabledDays = (date) => {
+        if (availabilityRule === 'weekdays_only' && (isSaturday(date) || isSunday(date))) {
+            return true;
+        }
+        if (availabilityRule === 'weekends_only' && (!isSaturday(date) && !isSunday(date))) {
+            return true;
+        }
+        const dateString = format(date, 'yyyy-MM-dd');
+        return blockedDates.some(d => format(d, 'yyyy-MM-dd') === dateString);
+    };
+
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
                 <div className="p-8">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-2xl font-bold">List a New Item</h2>
@@ -182,7 +215,6 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* Item Details Section */}
                         <div className="space-y-4">
                              <h3 className="text-lg font-medium text-gray-900">Item Details</h3>
                             <div>
@@ -207,7 +239,6 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                             </div>
                         </div>
 
-                        {/* Image Upload Section */}
                         <div>
                            <label className="block text-lg font-medium text-gray-900">Item Image</label>
                             <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
@@ -217,7 +248,7 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                                     ) : (
                                         <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
                                     )}
-                                    <div className="flex text-sm text-gray-600">
+                                    <div className="flex text-sm text-gray-600 justify-center">
                                         <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-black hover:text-gray-700 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-black">
                                             <span>Upload a file</span>
                                             <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleImageChange} accept="image/*" />
@@ -229,7 +260,6 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                             </div>
                         </div>
 
-                        {/* Location Section */}
                         <div className="space-y-4">
                              <h3 className="text-lg font-medium text-gray-900">Item Location</h3>
                              <div>
@@ -252,18 +282,44 @@ export const CreateItemModal = ({ isOpen, onClose, onItemCreated, apiBaseUrl, to
                             </div>
                         </div>
                         
-                        {/* Availability Section */}
                          <div>
-                             <h3 className="text-lg font-medium text-gray-900">Set Availability Window</h3>
+                             <h3 className="text-lg font-medium text-gray-900">Set Availability</h3>
+                             <p className="text-sm text-gray-500">First, set the overall date range your item is available.</p>
                              <div className="mt-2 flex justify-center border rounded-lg overflow-hidden">
-                                <DateRangePicker
+                                <DateRange
                                     onChange={item => setAvailability([item.selection])}
                                     ranges={availability}
-                                    months={2}
-                                    direction="horizontal"
+                                    months={1} 
                                     minDate={new Date()}
                                     maxDate={addYears(new Date(), 1)}
                                 />
+                             </div>
+                             <div className="mt-4">
+                                 <label className="block text-sm font-medium text-gray-700">Rental Rules</label>
+                                 <div className="mt-2 flex justify-center rounded-lg shadow-sm">
+                                    <button type="button" onClick={() => setAvailabilityRule('all_days')} className={`px-4 py-2 text-sm font-medium rounded-l-lg ${availabilityRule === 'all_days' ? 'bg-black text-white' : 'bg-white text-gray-700 hover:bg-gray-50 border'}`}>All Days</button>
+                                    <button type="button" onClick={() => setAvailabilityRule('weekdays_only')} className={`px-4 py-2 text-sm font-medium -ml-px ${availabilityRule === 'weekdays_only' ? 'bg-black text-white' : 'bg-white text-gray-700 hover:bg-gray-50 border'}`}>Weekdays Only</button>
+                                    <button type="button" onClick={() => setAvailabilityRule('weekends_only')} className={`px-4 py-2 text-sm font-medium rounded-r-lg -ml-px ${availabilityRule === 'weekends_only' ? 'bg-black text-white' : 'bg-white text-gray-700 hover:bg-gray-50 border'}`}>Weekends Only</button>
+                                </div>
+                             </div>
+
+                             <div className="mt-4">
+                                <label className="block text-sm font-medium text-gray-700">Block Out Specific Dates (Optional)</label>
+                                <p className="text-sm text-gray-500">Click on dates in the calendar below to toggle them as unavailable.</p>
+                                <div className="mt-2 flex justify-center border rounded-lg overflow-hidden">
+                                     <Calendar
+                                        onChange={handleBlockDateToggle}
+                                        disabledDates={blockedDates}
+                                        // ** THE FIX IS HERE: Constrain the calendar to the selected availability range **
+                                        minDate={availability[0].startDate}
+                                        maxDate={availability[0].endDate}
+                                    />
+                                </div>
+                                {blockedDates.length > 0 && (
+                                    <div className="mt-2 text-sm text-gray-600">
+                                        <strong>Blocked:</strong> {blockedDates.map(d => format(d, 'MM/dd/yy')).join(', ')}
+                                    </div>
+                                )}
                              </div>
                         </div>
 

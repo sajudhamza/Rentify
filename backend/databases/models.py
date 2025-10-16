@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     Date, 
     Enum as SQLAlchemyEnum,
+    JSON # Import the JSON type
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -69,9 +70,13 @@ class Item(Base):
     state: Mapped[str | None] = mapped_column(String, nullable=True)
     zip_code: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # New Availability Date Fields
+    # Availability Date Fields
     available_from: Mapped[date | None] = mapped_column(Date, nullable=True)
     available_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    # ** NEW: Fields for granular availability control **
+    availability_rule: Mapped[str | None] = mapped_column(String, nullable=True, default='all_days')
+    disabled_dates: Mapped[list[date] | None] = mapped_column(JSON, nullable=True)
 
     owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
     category_id: Mapped[int] = mapped_column(
