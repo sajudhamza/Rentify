@@ -1,5 +1,3 @@
-# backend/databases/schemas.py
-
 from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional, List
 from datetime import datetime, date
@@ -52,7 +50,6 @@ class CategoryCreate(CategoryBase):
 
 class CategoryResponse(CategoryBase):
     id: int
-    description: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -62,10 +59,11 @@ class CategoryResponse(CategoryBase):
 class ItemResponse(BaseModel):
     pass
 
+
 # --- Booking Schemas ---
 class BookingBase(BaseModel):
-    start_date: date
-    end_date: date
+    start_date: datetime # Use datetime for precise times
+    end_date: datetime   # Use datetime for precise times
 
 
 class BookingCreate(BookingBase):
@@ -82,7 +80,7 @@ class BookingResponse(BookingBase):
     status: BookingStatus
     item_id: int
     renter_id: int
-    item: ItemResponse 
+    item: "ItemResponse" # Use string forward reference
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -93,14 +91,17 @@ class ItemBase(BaseModel):
     description: str
     price_per_day: float
     category_id: int
+    
+    # Location fields
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     zip_code: Optional[str] = None
+
+    # Availability fields
     available_from: Optional[date] = None
     available_to: Optional[date] = None
-    # ** NEW: Add availability rule and disabled dates **
-    availability_rule: Optional[str] = 'all_days'
+    availability_rule: Optional[str] = "all_days"
     disabled_dates: Optional[List[date]] = []
 
 
@@ -114,10 +115,12 @@ class ItemUpdate(BaseModel):
     price_per_day: Optional[float] = None
     is_available: Optional[bool] = None
     category_id: Optional[int] = None
+    
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     zip_code: Optional[str] = None
+
     available_from: Optional[date] = None
     available_to: Optional[date] = None
     availability_rule: Optional[str] = None
@@ -139,7 +142,6 @@ class ItemResponse(ItemBase):
 
 # Rebuild the models that have forward references
 BookingResponse.model_rebuild()
-ItemResponse.model_rebuild()
 
 
 # --- Review Schemas ---

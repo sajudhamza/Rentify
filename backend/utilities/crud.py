@@ -2,7 +2,8 @@
 
 import os
 import shutil
-import traceback # Import the traceback module for better debugging
+import traceback
+import math
 from sqlalchemy.orm import Session, joinedload, contains_eager
 from sqlalchemy import or_
 from fastapi import HTTPException, UploadFile, status
@@ -39,6 +40,7 @@ def get_user_by_identifier(db: Session, identifier: str):
     return db.query(models.User).filter(
         or_(models.User.username == identifier, models.User.email == identifier)
     ).first()
+
 
 def get_users(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.User).offset(skip).limit(limit).all()
@@ -143,30 +145,42 @@ def create_booking(db: Session, item_id: int, renter_id: int, booking: schemas.B
     if item.owner_id == renter_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot book your own item")
 
-    days = (booking.end_date - booking.start_date).days
-    if days <= 0:
+    delta = booking.end_date - booking.start_date
+    if delta.total_seconds() <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="End date must be after start date.")
+        
+    rental_days = math.ceil(delta.total_seconds() / (24 * 3600))
 
     db_booking = models.Booking(
         **booking.model_dump(),
         renter_id=renter_id,
         item_id=item_id,
-        total_price=item.price_per_day * days,
+        total_price=item.price_per_day * rental_days,
         status="pending"
     )
     db.add(db_booking)
     db.commit()
-    db.refresh(db_booking)
+    db.refresh(db_booking, ["item", "renter"])
     
     try:
-        db.refresh(db_booking, ["item", "renter"]) 
         email_sender.send_booking_request_email(booking=db_booking)
     except Exception as e:
         print(f"Error sending booking request email: {e}")
 
     return db_booking
 
+def get_item_bookings(db: Session, item_id: int):
+    """Fetches confirmed bookings for a specific item to block out dates."""
+    return db.query(models.Booking).filter(
+        models.Booking.item_id == item_id,
+        models.Booking.status == 'confirmed'
+    ).all()
+
 def get_my_bookings(db: Session, user_id: int):
+    """
+    Fetches all bookings made by a specific user, ensuring all related
+    item and owner data is pre-loaded for efficient serialization.
+    """
     return (
         db.query(models.Booking)
         .filter(models.Booking.renter_id == user_id)
@@ -199,7 +213,6 @@ def get_my_listing_bookings(db: Session, owner_id: int):
     )
 
 def update_booking_status(db: Session, booking_id: int, new_status: str, current_user_id: int):
-    # ** THE FIX IS HERE **
     # Eagerly load all relationships needed for both the authorization check
     # and the email templates in a single, robust query.
     db_booking = (
@@ -217,7 +230,6 @@ def update_booking_status(db: Session, booking_id: int, new_status: str, current
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
     
     # Authorize: Ensure the current user owns the item being booked.
-    # This check can now safely use the pre-loaded relationship.
     if db_booking.item.owner_id != current_user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this booking")
     
@@ -226,8 +238,6 @@ def update_booking_status(db: Session, booking_id: int, new_status: str, current
     db.commit()
     
     # --- Send Notification Email if Confirmed ---
-    # The relationships are now guaranteed to be loaded on the db_booking object
-    # even after the commit, because they were eagerly loaded in the initial query.
     if new_status == "confirmed":
         try:
             email_sender.send_booking_approval_email(booking=db_booking)
@@ -242,3 +252,4 @@ def update_booking_status(db: Session, booking_id: int, new_status: str, current
     # Refresh the object to get the latest state from the DB before returning to client
     db.refresh(db_booking)
     return db_booking
+

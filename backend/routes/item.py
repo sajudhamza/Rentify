@@ -104,3 +104,11 @@ def update_item_route(
         image=image
     )
 
+@router.get("/{item_id}/bookings", response_model=List[schemas.BookingResponse])
+def get_item_bookings_route(item_id: int, db: Session = Depends(database.get_db)):
+    """
+    Get a list of confirmed bookings for a specific item.
+    This is useful for disabling dates on the booking calendar.
+    """
+    return crud.get_item_bookings(db=db, item_id=item_id)
+

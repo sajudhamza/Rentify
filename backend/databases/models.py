@@ -6,9 +6,9 @@ from sqlalchemy import (
     String,
     Float,
     DateTime,
-    Date, 
+    Date,
     Enum as SQLAlchemyEnum,
-    JSON # Import the JSON type
+    JSON,
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -73,10 +73,11 @@ class Item(Base):
     # Availability Date Fields
     available_from: Mapped[date | None] = mapped_column(Date, nullable=True)
     available_to: Mapped[date | None] = mapped_column(Date, nullable=True)
-
-    # ** NEW: Fields for granular availability control **
-    availability_rule: Mapped[str | None] = mapped_column(String, nullable=True, default='all_days')
+    
+    # Granular availability fields
+    availability_rule: Mapped[str] = mapped_column(String, default="all_days")
     disabled_dates: Mapped[list[date] | None] = mapped_column(JSON, nullable=True)
+
 
     owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
     category_id: Mapped[int] = mapped_column(
@@ -99,8 +100,8 @@ class Item(Base):
 class Booking(Base):
     __tablename__ = "bookings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    start_date: Mapped[date] = mapped_column(Date)
-    end_date: Mapped[date] = mapped_column(Date)
+    start_date: Mapped[DateTime] = mapped_column(DateTime)
+    end_date: Mapped[DateTime] = mapped_column(DateTime)
     total_price: Mapped[float] = mapped_column(Float)
     status: Mapped[BookingStatus] = mapped_column(
         SQLAlchemyEnum(BookingStatus), default=BookingStatus.pending
