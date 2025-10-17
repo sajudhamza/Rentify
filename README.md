@@ -100,3 +100,23 @@ Alembic:
 docker-compose exec api alembic -c config/alembic.ini revision --autogenerate -m "Add description to categories"
 
 docker-compose exec api alembic -c config/alembic.ini upgrade head
+
+sample .env file:
+
+# ---- DATABASE CONFIG ----
+POSTGRES_USER=rentify_user
+POSTGRES_PASSWORD=super_secret_password
+POSTGRES_DB=rentify_db
+
+# ---- BACKEND CONFIG ----
+DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
+SECRET_KEY=super_secret_jwt_key_for_local_dev
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# ---- FRONTEND CONFIG ----
+VITE_API_BASE_URL=http://localhost:8000
+
+# ---- OTHER CONFIGS (Optional) ----
+# MAIL SETTINGS EXAMPLE (if used)
+SMTP_HOST=mailhog
+SMTP_PORT=1025

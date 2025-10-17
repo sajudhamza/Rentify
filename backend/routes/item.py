@@ -104,6 +104,14 @@ def update_item_route(
         image=image
     )
 
+@router.delete("/{item_id}", status_code=200)
+def delete_item_route(
+    item_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(security.get_current_active_user)
+):
+    return crud.delete_item(db, item_id, current_user)
+
 @router.get("/{item_id}/bookings", response_model=List[schemas.BookingResponse])
 def get_item_bookings_route(item_id: int, db: Session = Depends(database.get_db)):
     """

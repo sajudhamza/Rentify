@@ -9,7 +9,8 @@ from fastapi import HTTPException, UploadFile, status
 from typing import Optional, Dict, Any
 
 from databases import models, schemas
-from . import passwords, email_sender
+from utilities.security import verify_item_ownership
+from utilities import passwords, email_sender
 
 # --- Helper for saving images ---
 def save_upload_file(upload_file: UploadFile) -> Optional[str]:
@@ -168,6 +169,18 @@ def update_item(db: Session, item_id: int, current_user_id: int, update_data: Di
     db.commit()
     db.refresh(db_item)
     return db_item
+
+def delete_item(db: Session, item_id: int, current_user: models.User):
+    """
+    Deletes an item only if the current user is its owner.
+    """
+    db_item = get_item(db, item_id)
+    if db_item.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this item")
+
+    db.delete(db_item)
+    db.commit()
+    return {"detail": "Item deleted successfully"}
 
 # ===================================================================
 # BOOKING
