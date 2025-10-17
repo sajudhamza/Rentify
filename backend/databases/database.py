@@ -4,10 +4,15 @@ from sqlalchemy.ext.declarative import declarative_base
 import os
 
 # In a real application, this should come from environment variables
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://rentify_user:password@localhost/rentify_db")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://rentify_user:your_secure_password@db/rentify_db")
 
 
 engine = create_engine(DATABASE_URL)
+
+# In a real application, this should come from environment variables
+#SQLALCHEMY_DATABASE_URL = "postgresql://rentify_user:your_secure_password@db/rentify_db"
+
+#engine = create_engine(SQLALCHEMY_DATABASE_URL)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
 
