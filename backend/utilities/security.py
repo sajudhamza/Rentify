@@ -75,3 +75,15 @@ def get_current_active_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
     return current_user
 
+
+def verify_item_ownership(item: models.Item, current_user: models.User):
+    """
+    Ensures that the given user is the owner of the provided item.
+    Raises HTTP 403 if not authorized.
+    """
+    if item.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to modify this item"
+        )
+
