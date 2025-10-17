@@ -55,37 +55,6 @@ class CategoryResponse(CategoryBase):
 
 
 # --- Item Schemas ---
-# Forward declaration for ItemResponse to be used in BookingResponse
-class ItemResponse(BaseModel):
-    pass
-
-
-# --- Booking Schemas ---
-class BookingBase(BaseModel):
-    start_date: datetime # Use datetime for precise times
-    end_date: datetime   # Use datetime for precise times
-
-
-class BookingCreate(BookingBase):
-    pass
-
-
-class BookingStatusUpdate(BaseModel):
-    status: BookingStatus
-
-
-class BookingResponse(BookingBase):
-    id: int
-    total_price: float
-    status: BookingStatus
-    item_id: int
-    renter_id: int
-    item: "ItemResponse" # Use string forward reference
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# --- Item Schemas (Full Definition) ---
 class ItemBase(BaseModel):
     name: str
     description: str
@@ -127,20 +96,46 @@ class ItemUpdate(BaseModel):
     disabled_dates: Optional[List[date]] = None
 
 
-# Now fully define ItemResponse
+# --- Booking Schemas (forward reference to ItemResponse) ---
+class BookingBase(BaseModel):
+    start_date: datetime
+    end_date: datetime
+
+
+class BookingCreate(BookingBase):
+    pass
+
+
+class BookingStatusUpdate(BaseModel):
+    status: BookingStatus
+
+
+# Define BookingResponse first, referencing "ItemResponse" as a string
+class BookingResponse(BookingBase):
+    id: int
+    total_price: float
+    status: BookingStatus
+    item_id: int
+    renter_id: int
+    item: Optional["ItemResponse"]  # <-- forward reference to ItemResponse
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Now fully define ItemResponse (after BookingResponse) ---
 class ItemResponse(ItemBase):
     id: int
     is_available: bool
     owner_id: int
     image_url: Optional[str] = None
     created_at: datetime
-    owner: UserResponse
-    category: CategoryResponse
+    owner: Optional[UserResponse] = None
+    category: Optional[CategoryResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# Rebuild the models that have forward references
+# Resolve the forward reference so BookingResponse knows what ItemResponse is
 BookingResponse.model_rebuild()
 
 
@@ -161,4 +156,3 @@ class ReviewResponse(ReviewBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
