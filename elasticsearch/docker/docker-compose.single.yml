@@ -1,0 +1,31 @@
+version: "3.8"
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    container_name: es-single
+    environment:
+      - node.name=es-single
+      - cluster.name=rentify-cluster
+      - discovery.type=single-node
+      - network.host=0.0.0.0
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+        - esdata-single:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+volumes:
+  esdata-single:
+    driver: local
+
+
+# docker compose -f docker-compose.single.yml up -d
+# check Health
+# curl -s http://localhost:9200/ | jq .
+#curl -s http://localhost:9200/_cluster/health?pretty
+# If xpack.security.enabled=false is set, you’ll be able to talk to ES on 9200 without auth (dev only).

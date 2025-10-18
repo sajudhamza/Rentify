@@ -1,0 +1,15 @@
+{
+    "mappings": {
+        "properties": {
+            "title": { "type": "text", "analyzer": "standard" },
+            "description":{ "type": "text", "analyzer": "standard" },
+            "price": { "type": "double" },
+            "currency": { "type": "keyword" },
+            "category": { "type": "keyword" },
+            "tags": { "type": "keyword" },
+            "location": { "type": "geo_point" },
+            "available": { "type": "boolean" },
+            "posted_at": { "type": "date" }
+        }
+    }
+}

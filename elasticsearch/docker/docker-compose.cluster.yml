@@ -1,0 +1,110 @@
+version: "3.8"
+services:
+  es-master:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    container_name: es-master
+    environment:
+      - node.name=es-master
+      - cluster.name=rentify-cluster
+      - node.roles=master,ingest
+      - network.host=0.0.0.0
+      - discovery.seed_hosts=es-master,es-data1,es-data2,es-ml
+      - cluster.initial_master_nodes=es-master
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false 
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata-data1:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"   # expose master 9200 for convenience (only one node needed externally)
+      - "9300:9300"
+
+    es-data1:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    container_name: es-data1
+    environment:
+      - node.name=es-data1
+      - cluster.name=rentify-cluster
+      - node.roles=data,ingest
+      - network.host=0.0.0.0
+      - discovery.seed_hosts=es-master,es-data1,es-data2,es-ml
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata-data1:/usr/share/elasticsearch/data
+
+
+  es-data2:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    container_name: es-data2
+    environment:
+      - node.name=es-data2
+      - cluster.name=rentify-cluster
+      - node.roles=data,ingest
+      - network.host=0.0.0.0
+      - discovery.seed_hosts=es-master,es-master2,es-master3,es-data1,es-data2,es-ml
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+    - esdata-data2:/usr/share/elasticsearch/data
+
+
+  es-ml:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    container_name: es-ml
+    environment:
+      - node.name=es-ml
+      - cluster.name=rentify-cluster
+      - node.roles=ml,ingest
+      - network.host=0.0.0.0
+      - discovery.seed_hosts=es-master,es-master2,es-master3,es-data1,es-data2,es-ml
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata-ml:/usr/share/elasticsearch/data
+
+
+volumes:
+  esdata-master:
+  esdata-data1:
+  esdata-data2:
+  esdata-ml:
+
+
+#docker compose -f docker-compose.cluster.yml up -d
+# docker compose -f docker-compose.cluster.yml up -d
+#Verify cluster:
+
+#curl -s http://localhost:9200/_cat/nodes?v
+#curl -s http://localhost:9200/_cluster/health?pretty
+
+# cluster.initial_master_nodes should be set only once at first cluster boot to the master-eligible nodes. In real production you normally include 3 master-eligible nodes.
+
+#discovery.seed_hosts helps nodes find each other.
+
+#node.roles controls each node’s responsibilities:
+
+#master — cluster management (elections)
+
+#data — holds indexed data and executes data-related operations
+
+#ingest — runs ingest pipelines/transforms
+
+#ml — dedicated ML role (requires licensing for advanced ML; some features may be limited)
+
+#you can create a coordinating-only node by omitting master and data roles.
