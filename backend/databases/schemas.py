@@ -96,7 +96,16 @@ class ItemUpdate(BaseModel):
     disabled_dates: Optional[List[date]] = None
 
 
-# --- Booking Schemas (forward reference to ItemResponse) ---
+# --- NEW: A simple Item schema for use inside BookingResponse to break the loop ---
+class ItemInBookingResponse(BaseModel):
+    id: int
+    name: str
+    image_url: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Booking Schemas ---
 class BookingBase(BaseModel):
     start_date: datetime
     end_date: datetime
@@ -110,20 +119,20 @@ class BookingStatusUpdate(BaseModel):
     status: BookingStatus
 
 
-# Define BookingResponse first, referencing "ItemResponse" as a string
 class BookingResponse(BookingBase):
     id: int
     total_price: float
     status: BookingStatus
     item_id: int
     renter_id: int
-    item: Optional["ItemResponse"]  # <-- forward reference to ItemResponse
+    # --- FIX: Use the simple Item schema here ---
+    item: ItemInBookingResponse 
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# --- Now fully define ItemResponse (after BookingResponse) ---
-class ItemResponse(ItemBase):
+# --- NEW: A simpler Item response for lists (e.g., homepage) ---
+class ItemSummaryResponse(ItemBase):
     id: int
     is_available: bool
     owner_id: int
@@ -135,8 +144,11 @@ class ItemResponse(ItemBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# Resolve the forward reference so BookingResponse knows what ItemResponse is
-BookingResponse.model_rebuild()
+# --- The full Item response for the detail page ---
+class ItemResponse(ItemSummaryResponse): # Inherits from the summary
+    bookings: List[BookingResponse] = [] # Only the detail view has bookings
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- Review Schemas ---

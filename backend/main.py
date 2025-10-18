@@ -22,10 +22,12 @@ os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- CORS Middleware ---
-origins = [
-    "http://localhost",
-    "http://localhost:5173",
-]
+# origins = [
+#     "http://localhost",
+#     "http://localhost:5173",
+# ]
+origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,

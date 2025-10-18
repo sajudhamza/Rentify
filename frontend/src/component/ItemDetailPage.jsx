@@ -4,7 +4,7 @@ import { ArrowLeft, MapPin, Star, Loader2, AlertCircle, Calendar as CalendarIcon
 import { Calendar } from 'react-date-range';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
-import { addDays, isSaturday, isSunday, parseISO, format, eachDayOfInterval, isWithinInterval, startOfDay } from 'date-fns';
+import { addDays, isSaturday, isSunday, parseISO, format, isWithinInterval, startOfDay } from 'date-fns';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -20,7 +20,6 @@ const timeOptions = Array.from({ length: 24 * 2 }, (_, i) => {
 export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion }) => {
     const { itemId } = useParams();
     const [item, setItem] = useState(null);
-    const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [bookingError, setBookingError] = useState('');
@@ -45,19 +44,13 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
             setLoading(true);
             setError(null);
             try {
-                const [itemResponse, bookingsResponse] = await Promise.all([
-                    fetch(`${API_BASE_URL}/api/items/${itemId}`),
-                    fetch(`${API_BASE_URL}/api/items/${itemId}/bookings`)
-                ]);
-
-                if (!itemResponse.ok) throw new Error('Item not found or there was a server error.');
-                if (!bookingsResponse.ok) throw new Error('Could not fetch existing bookings for this item.');
-                
-                const itemData = await itemResponse.json();
-                const bookingsData = await bookingsResponse.json();
-                
+                // --- FIX #1: Added /api back to the URL ---
+                const response = await fetch(`${API_BASE_URL}/api/items/${itemId}`);
+                if (!response.ok) {
+                    throw new Error('Item not found or there was a server error.');
+                }
+                const itemData = await response.json();
                 setItem(itemData);
-                setBookings(bookingsData);
             } catch (err) {
                 setError(err.message);
             } finally {
@@ -69,7 +62,6 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
             fetchData();
         }
         
-        // Effect to handle clicks outside the calendars to close them
         const handleClickOutside = (event) => {
             if (startCalendarRef.current && !startCalendarRef.current.contains(event.target)) {
                 setShowStartCalendar(false);
@@ -86,7 +78,6 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
 
     }, [itemId, dataVersion]);
     
-    // Helper function to combine a date and a time string into a full Date object
     const combineDateAndTime = (date, time12h) => {
         const [time, modifier] = time12h.split(' ');
         let [hours, minutes] = time.split(':');
@@ -97,7 +88,6 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
         newDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
         return newDate;
     };
-
 
     const handleBookingRequest = async () => {
         if (!currentUser || !token) {
@@ -116,6 +106,7 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
         }
 
         try {
+            // --- FIX #2: Added /api back to the URL ---
             const response = await fetch(`${API_BASE_URL}/api/items/${item.id}/bookings`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -141,36 +132,35 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
         if (end <= start) return { days: 0, price: 0 };
 
         const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-        const days = Math.ceil(hours / 24); // Round up to the nearest full day
+        const days = Math.ceil(hours / 24);
         return { days, price: days * item.price_per_day };
     };
     const { days: totalDays, price: totalPrice } = calculateTotalPrice();
     
-    // Comprehensive function to determine which dates should be disabled on the calendar
     const getDisabledDays = (date) => {
         const today = startOfDay(new Date());
         if (date < today) return true;
 
         if (!item) return false;
         
-        // Disable dates outside the owner's set availability window
         const itemMinDate = item.available_from ? parseISO(item.available_from) : null;
         const itemMaxDate = item.available_to ? parseISO(item.available_to) : null;
         if (itemMinDate && date < itemMinDate) return true;
         if (itemMaxDate && date > itemMaxDate) return true;
 
-        // Disable based on weekday/weekend rules
         if (item.availability_rule === 'weekdays_only' && (isSaturday(date) || isSunday(date))) return true;
         if (item.availability_rule === 'weekends_only' && !isSaturday(date) && !isSunday(date)) return true;
 
-        // Disable dates specifically blocked by the owner
         const ownerBlockedDates = (item.disabled_dates || []).map(d => format(parseISO(d), 'yyyy-MM-dd'));
         if (ownerBlockedDates.includes(format(date, 'yyyy-MM-dd'))) return true;
         
-        // Disable dates that are part of a confirmed booking
-        for (const booking of bookings) {
-            const interval = { start: startOfDay(parseISO(booking.start_date)), end: startOfDay(parseISO(booking.end_date)) };
-            if (isWithinInterval(date, interval)) return true;
+        if (item.bookings) {
+            for (const booking of item.bookings) {
+                if (booking.status === 'confirmed' || booking.status === 'pending') {
+                    const interval = { start: startOfDay(parseISO(booking.start_date)), end: startOfDay(parseISO(booking.end_date)) };
+                    if (isWithinInterval(date, interval)) return true;
+                }
+            }
         }
 
         return false;
@@ -179,7 +169,6 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
     const handleStartDateSelect = (date) => {
         setStartDate(date);
         setShowStartCalendar(false);
-        // Automatically adjust end date if it's before the new start date
         if (date >= endDate) {
             setEndDate(addDays(date, 1));
         }
@@ -220,6 +209,7 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
         : `https://placehold.co/600x600/e2e8f0/334155?text=${encodeURIComponent(item.name)}`;
 
     return (
+        // The rest of your JSX remains the same
         <div className="container mx-auto px-4 py-8 max-w-4xl">
             <Link to="/" className="flex items-center text-gray-600 hover:text-black mb-6">
                 <ArrowLeft size={18} className="mr-2" />
@@ -345,4 +335,3 @@ export const ItemDetailPage = ({ currentUser, onEditClick, token, dataVersion })
         </div>
     );
 };
-

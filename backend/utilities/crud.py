@@ -4,7 +4,7 @@ import os
 import shutil
 import traceback
 from sqlalchemy.orm import Session, joinedload, contains_eager
-from sqlalchemy import or_
+from sqlalchemy import or_, and_  # <-- IMPORT and_
 from fastapi import HTTPException, UploadFile, status
 from typing import Optional, Dict, Any
 
@@ -120,9 +120,14 @@ def get_items(db: Session, skip: int = 0, limit: int = 100):
     """
     Fetches all items, eagerly loading owner and category data.
     """
+    # --- THE FIX IS HERE: Added joinedload for bookings ---
     return (
         db.query(models.Item)
-        .options(joinedload(models.Item.owner), joinedload(models.Item.category))
+        .options(
+            joinedload(models.Item.owner), 
+            joinedload(models.Item.category),
+            joinedload(models.Item.bookings) # <-- THIS LINE IS ADDED
+        )
         .offset(skip)
         .limit(limit)
         .all()
@@ -145,7 +150,11 @@ def get_item(db: Session, item_id: int):
     """
     item = (
         db.query(models.Item)
-        .options(joinedload(models.Item.owner), joinedload(models.Item.category))
+        .options(
+            joinedload(models.Item.owner), 
+            joinedload(models.Item.category),
+            joinedload(models.Item.bookings) # Eagerly load bookings
+        )
         .filter(models.Item.id == item_id)
         .first()
     )
@@ -202,6 +211,23 @@ def create_booking(db: Session, item_id: int, renter_id: int, booking: schemas.B
     item = get_item(db, item_id)
     if item.owner_id == renter_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot book your own item")
+
+    # --- START: Double Booking Validation ---
+    conflicting_booking = db.query(models.Booking).filter(
+        and_(
+            models.Booking.item_id == item_id,
+            models.Booking.status.in_(['pending', 'confirmed']),
+            models.Booking.start_date < booking.end_date,
+            models.Booking.end_date > booking.start_date
+        )
+    ).first()
+
+    if conflicting_booking:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The item is already booked for the selected dates."
+        )
+    # --- END: Double Booking Validation ---
 
     # Use ceiling of hours / 24 to calculate days, ensuring minimum 1 day rental
     hours = (booking.end_date - booking.start_date).total_seconds() / 3600
@@ -308,4 +334,3 @@ def update_booking_status(db: Session, booking_id: int, new_status: str, current
 
     db.refresh(db_booking)
     return db_booking
-
